@@ -416,3 +416,147 @@ const Charge = () => {
 };
 
 export default Charge;
+
+// "use client";
+
+// import { useState } from "react";
+// import { useRouter } from "next/navigation"; 
+
+// import { ChevronLeft, ChevronRight, Info, IndianRupee } from "lucide-react";
+// import { Button } from "@/components/ui/button";
+// import { Card, CardContent } from "@/components/ui/card";
+// import { useChargingStatus } from "@/hooks/useChargingStatus";
+// import { ref, update } from "firebase/database";
+// import { database } from "@/config/firebase";
+// import { toast } from "sonner";
+// import {
+//   Tooltip,
+//   TooltipContent,
+//   TooltipTrigger,
+//   TooltipProvider,
+// } from "@/components/ui/tooltip";
+
+// export default function Page() {
+//   const [amount, setAmount] = useState(0);
+//   const [isLoading, setIsLoading] = useState(false);
+//   const router = useRouter();
+//   const { status, updateChargingStatus, resetChargingStatus } = useChargingStatus();
+
+//   const formatNumber = (num: number) => `₹${num.toFixed(2)}`;
+//   const incrementValue = () => setAmount((prev) => prev + 1);
+//   const decrementValue = () => setAmount((prev) => (prev > 0 ? prev - 1 : 0));
+//   const handleQuickSelect = (value: number) => setAmount(value);
+
+//   const handleSelect = async () => {
+//     if (amount === 0) {
+//       toast.error("Please select a valid amount");
+//       return;
+//     }
+
+//     setIsLoading(true);
+//     try {
+//       const targetEnergy = amount / 30; // Calculate target energy
+//       const targetRef = ref(database, "charging/targetEnergy");
+//       await update(targetRef, { targetEnergy }); // Update target energy in Firebase
+
+//       const chargingSuccess = await updateChargingStatus(true);
+//       if (chargingSuccess) {
+//         toast.success(`Charging initialized for ₹${amount}.`);
+//         router.push("/charge"); // Redirect to charge page
+//       } else {
+//         toast.error("Failed to initialize charging");
+//       }
+//     } catch (error) {
+//       console.error("Error initializing charging:", error);
+//       toast.error("Failed to initialize charging");
+//     } finally {
+//       setIsLoading(false);
+//     }
+//   };
+
+//   return (
+//     <div
+//       className="w-[768px] h-[1024px] overflow-hidden bg-transparent font-sans pt-7"
+//       style={{
+//         backgroundImage: "url(/money-bg.png)",
+//         backgroundSize: "cover",
+//         backgroundPosition: "center",
+//       }}
+//     >
+//       <div className="flex justify-center items-center p-1 pt-40 w-full px-8">
+//         <Card className="w-full max-w-md bg-transparent border-none">
+//           <CardContent className="border-none p-8">
+//             <div className="flex flex-col items-center space-y-8">
+//               <div className="flex items-center space-x-3">
+//                 <IndianRupee className="w-8 h-8 text-red-500" />
+//                 <span className="text-xl font-semibold text-white">
+//                   Select Amount
+//                 </span>
+//                 <TooltipProvider>
+//                   <Tooltip>
+//                     <TooltipTrigger>
+//                       <Info className="w-5 h-5 text-neutral-400" />
+//                     </TooltipTrigger>
+//                     <TooltipContent>
+//                       <p>Select the amount you want to contribute or pay.</p>
+//                     </TooltipContent>
+//                   </Tooltip>
+//                 </TooltipProvider>
+//               </div>
+
+//               <div className="flex gap-2 w-full justify-center">
+//                 {[100, 500, 1000, 5000].map((value) => (
+//                   <Button
+//                     key={value}
+//                     variant="outline"
+//                     size="sm"
+//                     onClick={() => handleQuickSelect(value)}
+//                     className={`px-3 py-1 text-sm ${
+//                       amount === value
+//                         ? "bg-red-500 text-white border-red-500"
+//                         : "text-neutral-400 hover:text-white"
+//                     }`}
+//                   >
+//                     {`₹${value}`}
+//                   </Button>
+//                 ))}
+//               </div>
+
+//               <div className="flex items-center justify-center w-full space-x-8">
+//                 <Button
+//                   variant="outline"
+//                   className="text-black hover:text-white hover:bg-neutral-950 transition-all duration-200 transform hover:scale-110"
+//                   onClick={decrementValue}
+//                 >
+//                   <ChevronLeft className="w-24 h-24 stroke-2" />
+//                 </Button>
+
+//                 <div className="text-7xl font-bold text-white">
+//                   {formatNumber(amount)}
+//                 </div>
+
+//                 <Button
+//                   variant="outline"
+//                   className="text-black hover:text-white hover:bg-neutral-950 transition-all duration-200 transform hover:scale-110"
+//                   onClick={incrementValue}
+//                 >
+//                   <ChevronRight className="w-24 h-24 stroke-2" />
+//                 </Button>
+//               </div>
+
+//               <div className="flex justify-center w-full">
+//                 <Button
+//                   className="w-40 h-12 text-lg bg-red-500 hover:bg-red-600 text-white font-semibold transition-all duration-200 hover:scale-105 disabled:opacity-50"
+//                   onClick={handleSelect}
+//                   disabled={isLoading || amount === 0}
+//                 >
+//                   {isLoading ? "Processing..." : "Confirm"}
+//                 </Button>
+//               </div>
+//             </div>
+//           </CardContent>
+//         </Card>
+//       </div>
+//     </div>
+//   );
+// }

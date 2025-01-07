@@ -1,0 +1,17 @@
+Backend Folder Structure:
+config/: Configuration files (database, general settings, MQTT).
+
+db.js, index.js, mqtt.js
+models/: Mongoose data models.
+
+DataModel.js
+routes/: API route definitions.
+
+apiRoutes.js, bmsRoutes.js, chargingRoutes.js, firebaseRoutes.js
+services/: Core business logic for various functionalities.
+
+bmsService.js, chargingService.js, firebaseService.js, mqttService.js
+.env: Environment variables (e.g., MongoDB URI, MQTT settings).
+
+server.js: Express server setup and route handling.
+

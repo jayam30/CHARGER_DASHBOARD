@@ -7,6 +7,8 @@ interface BMSData {
   voltage: number;
   current: number;
   SOC: number;
+  targetSOC?: number; //jayam
+  isFodThere?: boolean; //jayam
   isReceiverCoilDetected: boolean;
   loading: boolean;
   error: string | null;
@@ -17,7 +19,9 @@ export const useBMSData = () => {
     voltage: 0,
     current: 0,
     SOC: 0,
-    isReceiverCoilDetected: false,
+    targetSOC: 0, //jayam
+    isFodThere: false, //jayam
+    isReceiverCoilDetected: true,
     loading: true,
     error: null,
   });
@@ -31,11 +35,14 @@ export const useBMSData = () => {
       (snapshot) => {
         if (snapshot.exists()) {
           const data = snapshot.val();
+          console.log(data);
           setBMSData({
             voltage: data.latest?.voltage ?? 0,
             current: data.latest?.current ?? 0,
             SOC: data.latest?.SOC ?? 0,
-            isReceiverCoilDetected: data.IsReceiverCoilDetected ?? false,
+            targetSOC: data.latest?.targetSOC ?? 0,  //jayam
+            isFodThere: data.latest?.isFodThere ?? false, //jayam
+            isReceiverCoilDetected: data.IsReceiverCoilDetected ?? true,
             loading: false,
             error: null,
           });

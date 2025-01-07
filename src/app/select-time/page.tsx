@@ -155,7 +155,7 @@ export default function Page() {
     router.push("/park");
   }
 
-  return (
+ return (
     <div
       className="w-[768px] h-[1024px] overflow-hidden bg-transparent font-sans pt-7"
       style={{
