@@ -351,12 +351,28 @@ export default function Page() {
 
   const isFodThere = bmsData?.isFodThere ?? false;
   const isScootyParked = bmsData?.isReceiverCoilDetected ?? true;
+  const isMisaligned = bmsData?.isMisaligned ?? false;
 
-  const formatNumber = (num) => `₹${(Number(num ?? 0).toFixed(2))}`;
+  // const formatNumber = (num) => `₹${(Number(num ?? 0).toFixed(2))}`;
+  const formatNumber = (num: number | string | null | undefined): string => {
+    const validNumber = isNaN(Number(num)) ? 0 : Number(num); // Fallback to 0 if num is invalid
+    return `₹${validNumber.toFixed(2)}`;
+  };
+  
+  
+
 
   const incrementValue = () => setAmount((prev) => prev + 1);
   const decrementValue = () => setAmount((prev) => (prev > 0 ? prev - 1 : 0));
-  const handleQuickSelect = (value) => setAmount(value);
+  // const handleQuickSelect = (value) => setAmount(value);
+  const handleQuickSelect = (value: number): void => {
+    if (!isNaN(value) && value >= 0) {
+      setAmount(value);
+    } else {
+      console.error("Invalid value for quick select:", value);
+    }
+  };
+  
 
   const handleSelect = async () => {
     if (amount === 0) {
@@ -448,7 +464,13 @@ export default function Page() {
       router.push("/emergency-stop");
       return;
     }
-  }, [isFodThere, isScootyParked, isChargingInitialized, router]);
+
+    if (isMisaligned) {
+      setIsChargingInitialized(false);
+      router.push("/MisalignmentDetection");
+      return;
+    }
+  }, [isFodThere, isScootyParked, isChargingInitialized, isMisaligned, router]);
 
   return (
     <div
@@ -541,3 +563,160 @@ export default function Page() {
     </div>
   );
 }
+//ading missalignemt below
+
+// "use client";
+
+// import { useState, useEffect } from "react";
+// import { useRouter } from "next/navigation";
+// import { ChevronLeft, ChevronRight, Info, IndianRupee } from "lucide-react";
+// import { Button } from "@/components/ui/button";
+// import { Card, CardContent } from "@/components/ui/card";
+// import { toast } from "sonner";
+// import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+// import { useChargingStatus } from "@/hooks/useChargingStatus";
+// import { useBMSData } from "@/hooks/useBMSData";
+// import { ref, update } from "firebase/database";
+// import { database } from "@/config/firebase";
+// import ChargingPadWarning from "@/components/FodDialog";
+// import MisalignmentDialog from "@/components/MisalignmentDialog"; // New Import
+
+// export default function Page() {
+//   const [amount, setAmount] = useState(0);
+//   const [isLoading, setIsLoading] = useState(false);
+//   const [isChargingInitialized, setIsChargingInitialized] = useState(false);
+//   const [energy, setEnergy] = useState(0); // Accumulated energy in kWh
+//   const [targetEnergy, setTargetEnergy] = useState(0); // Target energy in kWh
+//   const router = useRouter();
+//   const { status, updateChargingStatus, resetChargingStatus } = useChargingStatus();
+//   const bmsData = useBMSData();
+
+//   const isFodThere = bmsData?.isFodThere ?? false;
+//   const isMisaligned = bmsData?.isMisaligned ?? false; // New variable for misalignment detection
+//   const isScootyParked = bmsData?.isReceiverCoilDetected ?? true;
+
+//   const formatNumber = (num) => `₹${(Number(num ?? 0).toFixed(2))}`;
+
+//   const incrementValue = () => setAmount((prev) => prev + 1);
+//   const decrementValue = () => setAmount((prev) => (prev > 0 ? prev - 1 : 0));
+//   const handleQuickSelect = (value) => setAmount(value);
+
+//   const handleSelect = async () => {
+//     if (amount === 0) {
+//       toast.error("Please select a valid amount");
+//       return;
+//     }
+
+//     setIsLoading(true);
+//     try {
+//       const amountRef = ref(database, "Payment/latest");
+//       await update(amountRef, { selectedAmount: amount });
+
+//       const calculatedTargetEnergy = amount / 30; // Assuming energy is derived from money
+//       const chargingSuccess = await updateChargingStatus(true, {
+//         hours: 0,
+//         minutes: 0,
+//         endTime: null, // Set the endTime if needed
+//       });
+
+//       if (chargingSuccess) {
+//         const targetEnergyRef = ref(database, "charging_status");
+//         console.log("Updating Firebase Target Energy:", calculatedTargetEnergy);
+
+//         await update(targetEnergyRef, { targetEnergy: calculatedTargetEnergy })
+//           .then(() => {
+//             console.log("Target Energy updated successfully in Firebase.");
+//           })
+//           .catch((error) => {
+//             console.error("Error updating target energy in Firebase:", error);
+//             throw error;
+//           });
+
+//         setTargetEnergy(calculatedTargetEnergy);
+//         setIsChargingInitialized(true);
+//         toast.success(`Charging initialized for amount: ${formatNumber(amount)}`);
+//         router.push("/charge");
+//       } else {
+//         toast.error("Failed to initialize charging");
+//       }
+//     } catch (error) {
+//       console.error("Error initializing charging:", error);
+//       toast.error("Failed to initialize charging");
+//     } finally {
+//       setIsLoading(false);
+//     }
+//   };
+
+//   useEffect(() => {
+//     if (isChargingInitialized) {
+//       const interval = setInterval(() => {
+//         const voltage = bmsData?.voltage ?? 0;
+//         const current = bmsData?.current ?? 0;
+
+//         if (voltage > 0 && current > 0) {
+//           const calculatedPower = voltage * current; // Power in watts
+//           const powerInKW = calculatedPower / 1000; // Power in kW
+//           const energyIncrement = powerInKW / 3600; // Energy in kWh per second
+
+//           setEnergy((prev) => {
+//             const newEnergy = prev + energyIncrement;
+
+//             if (newEnergy >= targetEnergy) {
+//               setIsChargingInitialized(false); // Stop charging locally
+//               update(ref(database, "charging_status"), { isChargingInitialized: false }); // Update Firebase
+//               setEnergy(0); // Reset energy
+//               toast.success("Charging complete. Target energy reached.");
+//               router.push("/done"); // Redirect to done page
+//             }
+//             return newEnergy;
+//           });
+//         }
+//       }, 1000);
+
+//       return () => clearInterval(interval);
+//     }
+//   }, [isChargingInitialized, bmsData, targetEnergy, router]);
+
+//   useEffect(() => {
+//     if (!isChargingInitialized) return;
+
+//     if (isFodThere) {
+//       setIsChargingInitialized(false);
+//       router.push("/fod-warning");
+//       return;
+//     }
+
+//     if (isMisaligned) { // Handle misalignment
+//       setIsChargingInitialized(false);
+//       router.push("/misalignment-warning");
+//       return;
+//     }
+
+//     if (!isScootyParked) {
+//       setIsChargingInitialized(false);
+//       router.push("/emergency-stop");
+//       return;
+//     }
+//   }, [isFodThere, isMisaligned, isScootyParked, isChargingInitialized, router]);
+
+//   return (
+//     <div
+//       className="w-[768px] h-[1024px] overflow-hidden bg-transparent font-sans pt-7"
+//       style={{
+//         backgroundImage: "url(/money-bg.png)",
+//         backgroundSize: "cover",
+//         backgroundPosition: "center",
+//       }}
+//     >
+//       <div className="flex justify-center items-center p-1 pt-40 w-full px-8">
+//         <ChargingPadWarning isFodThere={isFodThere} />
+//         <MisalignmentDialog isMisaligned={isMisaligned} /> {/* New Component */}
+//         <Card className="w-full max-w-md bg-transparent border-none">
+//           <CardContent className="border-none p-8">
+//             {/* Existing content remains unchanged */}
+//           </CardContent>
+//         </Card>
+//       </div>
+//     </div>
+//   );
+// }
