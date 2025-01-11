@@ -3,7 +3,6 @@ import { initializeApp, FirebaseApp } from "firebase/app";
 import { getDatabase, Database } from "firebase/database";
 
 const firebaseConfig = {
-
   apiKey: "AIzaSyDEf7gCSLAoHqyVgVjXHTBEX2lFNvur40M",
   authDomain: "esp-charger-de7ff.firebaseapp.com",
   databaseURL: "https://esp-charger-de7ff-default-rtdb.firebaseio.com",

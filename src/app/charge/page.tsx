@@ -1,4 +1,6 @@
+
 "use client";
+
 import WaveCharging from "@/components/WaveCharging";
 import { motion } from "framer-motion";
 import React, { useEffect, useState } from "react";
@@ -12,6 +14,7 @@ import { onValue, ref, set } from "firebase/database";
 import { database } from "@/config/firebase";
 import EmergencyStop from "@/components/EmergencyStop";
 import ChargingPadWarning from "@/components/FodDialog";
+import MisalignmentDialog from "@/components/MisalignmentDialog";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -20,9 +23,16 @@ const poppins = Poppins({
 
 const Charge = () => {
   const router = useRouter();
-  const { voltage, current, SOC, isReceiverCoilDetected, loading, error } =
-    useBMSData();
-  const { status, resetChargingStatus } = useChargingStatus();
+  const { voltage, current, SOC, isReceiverCoilDetected, loading, error } = useBMSData();
+  const { 
+    status, 
+    resetChargingStatus, 
+    fodTriggered, 
+    misalignmentTriggered, 
+    emergencyStop,
+    updateChargingStatus 
+  } = useChargingStatus();
+  
   const [isScootyParked, setIsScootyParked] = useState(true);
   const {
     timeLeft,
@@ -33,68 +43,36 @@ const Charge = () => {
     isPaused,
     setPausedTimeLeft,
     setPauseTimestamp,
-  } = useChargingTimer(); // Updated to use pause features
-  const [power, setPower] = React.useState<number>(0);
-  const [isFodThere, setIsFodThere] = useState(false);
-  const [energy, setEnergy] = React.useState<number>(0);
-  const [isChargingInitialized, setIsChargingInitialized] =
-    React.useState(false);
+  } = useChargingTimer();
+  
+  const [power, setPower] = useState<number>(0);
+  const [energy, setEnergy] = useState<number>(0);
+  const [isChargingInitialized, setIsChargingInitialized] = useState(false);
   const [unparkStartTime, setUnparkStartTime] = useState<number | null>(null);
-  const [parkCountdown, setParkCountdown] = useState<number>(60); // 60 seconds
-  const [isEmergencyStop, setIsEmergencyStop] = useState(false);
-
-  // Format time helper function
-  const formatTime = (value: number) => value.toString().padStart(2, "0");
-
-  console.log("Emergency: ", isEmergencyStop);
+  const [parkCountdown, setParkCountdown] = useState<number>(60);
 
   // Effect for Firebase listeners
   useEffect(() => {
     try {
       const coilRef = ref(database, "IsReceiverCoilDetected");
-      const fodRef = ref(database, "Is_FOD_Present");
-      const emergencyStopRef = ref(database, "emergencyStop");
-
-      // Separate listeners for better cleanup and independence
       const unsubscribeCoil = onValue(coilRef, (coilSnapshot) => {
         const isCoilDetected = coilSnapshot.val();
         setIsScootyParked(isCoilDetected);
       });
 
-      const unsubscribeFod = onValue(fodRef, (fodSnapshot) => {
-        const isFodPresent = fodSnapshot.val();
-        setIsFodThere(isFodPresent);
-      });
-
-      const unsubscribeEmergency = onValue(
-        emergencyStopRef,
-        (emergencySnapshot) => {
-          const emergencyValue = emergencySnapshot.val();
-          console.log("Emergency value from Firebase:", emergencyValue);
-          setIsEmergencyStop(emergencyValue);
-        }
-      );
-
-      // Cleanup all listeners
       return () => {
         unsubscribeCoil();
-        unsubscribeFod();
-        unsubscribeEmergency();
       };
     } catch (error) {
       console.error("Error setting up Firebase listeners:", error);
     }
-  }, []); // Empty dependency array since we want this to run once on mount
+  }, []);
 
-  // Updated effect for timer and energy calculation
+  // Effect for handling charging time
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
-    if (
-      status?.isChargingInitialized &&
-      status?.duration?.endTime &&
-      !isPaused
-    ) {
+    if (status?.isChargingInitialized && status?.duration?.endTime && !isPaused) {
       interval = setInterval(() => {
         const now = Date.now();
         const endTime = status.duration.endTime!;
@@ -110,20 +88,16 @@ const Charge = () => {
           return;
         }
 
-        // Convert milliseconds to hours, minutes, seconds
         const hours = Math.floor(difference / (1000 * 60 * 60));
-        const minutes = Math.floor(
-          (difference % (1000 * 60 * 60)) / (1000 * 60)
-        );
+        const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
         const seconds = Math.floor((difference % (1000 * 60)) / 1000);
 
         setTimeLeft({ hours, minutes, seconds });
 
-        // Calculate and update energy only if charging is active
-        if (isChargingInitialized && !isFodThere && current > 0) {
+        // Only calculate energy if all safety conditions are met
+        if (isChargingInitialized && !fodTriggered && !misalignmentTriggered && !emergencyStop && current > 0) {
           const calculatedPower = Number((voltage * current).toFixed(2));
           const powerInKW = calculatedPower / 1000;
-          // Energy accumulated per second (1/3600 of an hour)
           const calculatedEnergy = powerInKW / 3600;
           setEnergy((prev) => Number((prev + calculatedEnergy).toFixed(6)));
         }
@@ -141,20 +115,23 @@ const Charge = () => {
     resetChargingStatus,
     isPaused,
     isChargingInitialized,
-    isFodThere,
+    fodTriggered,
+    misalignmentTriggered,
+    emergencyStop,
     current,
     voltage,
   ]);
 
-  // Remove or modify the existing useEffect that was calculating power and energy
+  // Effect for power calculations
   useEffect(() => {
     setPower(0);
     if (loading || error || !voltage || !current || SOC === undefined) {
       return;
     }
 
-    if (current > 0.001) {
-      status.isChargingInitialized = true;
+    // Only initialize charging if safety conditions are met
+    if (current > 0.001 && !fodTriggered && !misalignmentTriggered && !emergencyStop) {
+      updateChargingStatus(true);
       setIsChargingInitialized(true);
     } else {
       setPower(0);
@@ -167,35 +144,42 @@ const Charge = () => {
       console.error("Calculation error:", err);
       setPower(0);
     }
-  }, [voltage, current, SOC, loading, error]);
+  }, [voltage, current, SOC, loading, error, fodTriggered, misalignmentTriggered, emergencyStop]);
 
-  // Updated effect for parking status with timer pause
+  // Effect for handling safety conditions
   useEffect(() => {
-    if (isScootyParked === false || isFodThere === true) {
-      pauseTimer(); // Pause the timer when scooter is not parked
-      // router.push("/park");
+    if (!isScootyParked || fodTriggered || misalignmentTriggered || emergencyStop) {
+      pauseTimer();
+      setIsChargingInitialized(false);
+      setPower(0);
+      updateChargingStatus(false);
     } else if (current <= 0) {
       pauseTimerOnly();
     } else {
       resumeTimer();
     }
-  }, [isScootyParked, router, pauseTimer, resumeTimer]);
+  }, [isScootyParked, fodTriggered, misalignmentTriggered, emergencyStop]);
 
-  // Add this new effect to handle unpark timing and countdown
+  // Effect for resetting energy when safety conditions are triggered
+  useEffect(() => {
+    if (fodTriggered || misalignmentTriggered || emergencyStop) {
+      setEnergy(0);
+      set(ref(database, "chargingStatus"), false);
+    }
+  }, [fodTriggered, misalignmentTriggered, emergencyStop]);
+
+  // Effect for handling unpark countdown
   useEffect(() => {
     let countdownInterval: NodeJS.Timeout;
 
     if (!isScootyParked) {
-      // Set the initial unpark time if not already set
       if (!unparkStartTime) {
         setUnparkStartTime(Date.now());
       }
 
-      // Start countdown timer
       countdownInterval = setInterval(() => {
         setParkCountdown((prev) => {
           if (prev <= 1) {
-            // Reset everything and redirect
             resetChargingStatus();
             setTimeLeft({ hours: 0, minutes: 0, seconds: 0 });
             setPausedTimeLeft(null);
@@ -209,7 +193,6 @@ const Charge = () => {
         });
       }, 1000);
     } else {
-      // Reset the unpark timer and countdown when scooter is parked
       setUnparkStartTime(null);
       setParkCountdown(60);
     }
@@ -221,27 +204,20 @@ const Charge = () => {
     };
   }, [isScootyParked, unparkStartTime, resetChargingStatus, router]);
 
-  useEffect(() => {
-    console.log("Emergency Stop State Changed:", isEmergencyStop);
-  }, [isEmergencyStop]);
-
   if (loading) {
-    return (
-      <div className="w-[768px] h-[1024px] flex items-center justify-center bg-[#2A2D32]">
-        Loading...
-      </div>
-    );
+    return <div className="w-[768px] h-[1024px] flex items-center justify-center bg-[#2A2D32]">Loading...</div>;
   }
 
   if (error) {
-    return (
-      <div className="w-[768px] h-[1024px] flex items-center justify-center bg-[#2A2D32]">
-        Error: {error}
-      </div>
-    );
+    return <div className="w-[768px] h-[1024px] flex items-center justify-center bg-[#2A2D32]">Error: {error}</div>;
   }
+//jayam test
+  const formatTime = (value: number): string => {
+    return value.toString().padStart(2, "0");
+  };
 
   return (
+
     <div
       className="w-[768px] h-[1024px] overflow-hidden bg-[#2A2D32] font-sans pt-7"
       style={{
@@ -250,6 +226,7 @@ const Charge = () => {
         backgroundPosition: "center",
       }}
     >
+     
       <div className="flex justify-center items-center p-1 pt-20 w-full px-8">
         <motion.div
           className="text-left flex-col gap-2 mb-12 relative"
@@ -292,7 +269,16 @@ const Charge = () => {
         </motion.div>
       </div>
 
-      <ChargingPadWarning isFodThere={isFodThere} />
+      <ChargingPadWarning isFodThere={fodTriggered} />
+    
+      {/* misalignment */}
+      <MisalignmentDialog isMisaligned={misalignmentTriggered} />
+
+      
+      
+      {/* /misalignmentSnapshot */}
+    
+
       <div className="flex flex-col items-center gap-6 mb-12 scale-150">
         <motion.div
           className="inline-flex items-center gap-2 px-4 py-2 bg-black/60 backdrop-blur-md rounded-full border border-white/5 shadow-lg shadow-cyan-500/10"
@@ -338,14 +324,16 @@ const Charge = () => {
               repeat: isScootyParked ? 0 : Infinity,
             }}
           >
-            <Image
-              src="/charge-bike.png"
-              alt="Charger pad"
-              width={500}
-              height={300}
-              className="drop-shadow-[0_0_15px_rgba(6,182,212,0.15)]"
-            />
+          
+              <Image
+                src="/charge-bike.png"
+                alt="Charger pad"
+                width={500}
+                height={300}
+                className="drop-shadow-[0_0_15px_rgba(6,182,212,0.15)]"
+              />
           </motion.div>
+           
           <div className="flex w-full items-center justify-center">
             <Image
               src="/charge-pad.png"
@@ -378,11 +366,13 @@ const Charge = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 1.2 }}
           >
+            
+            
             Time Remaining:{" "}
             <span className="group-hover:text-cyan-400/90 transition-colors duration-300">
               {formatTime(timeLeft.hours)}:{formatTime(timeLeft.minutes)}:
               {formatTime(timeLeft.seconds)}
-            </span>
+            </span> 
           </motion.div>
 
           <motion.div
@@ -410,153 +400,10 @@ const Charge = () => {
           </motion.div>
         </div>
       </div>
-      {isEmergencyStop && <EmergencyStop isEmergencyStop={isEmergencyStop} />}
+      {emergencyStop && <EmergencyStop isEmergencyStop={emergencyStop} />}
     </div>
   );
+  
 };
 
 export default Charge;
-
-// "use client";
-
-// import { useState } from "react";
-// import { useRouter } from "next/navigation"; 
-
-// import { ChevronLeft, ChevronRight, Info, IndianRupee } from "lucide-react";
-// import { Button } from "@/components/ui/button";
-// import { Card, CardContent } from "@/components/ui/card";
-// import { useChargingStatus } from "@/hooks/useChargingStatus";
-// import { ref, update } from "firebase/database";
-// import { database } from "@/config/firebase";
-// import { toast } from "sonner";
-// import {
-//   Tooltip,
-//   TooltipContent,
-//   TooltipTrigger,
-//   TooltipProvider,
-// } from "@/components/ui/tooltip";
-
-// export default function Page() {
-//   const [amount, setAmount] = useState(0);
-//   const [isLoading, setIsLoading] = useState(false);
-//   const router = useRouter();
-//   const { status, updateChargingStatus, resetChargingStatus } = useChargingStatus();
-
-//   const formatNumber = (num: number) => `₹${num.toFixed(2)}`;
-//   const incrementValue = () => setAmount((prev) => prev + 1);
-//   const decrementValue = () => setAmount((prev) => (prev > 0 ? prev - 1 : 0));
-//   const handleQuickSelect = (value: number) => setAmount(value);
-
-//   const handleSelect = async () => {
-//     if (amount === 0) {
-//       toast.error("Please select a valid amount");
-//       return;
-//     }
-
-//     setIsLoading(true);
-//     try {
-//       const targetEnergy = amount / 30; // Calculate target energy
-//       const targetRef = ref(database, "charging/targetEnergy");
-//       await update(targetRef, { targetEnergy }); // Update target energy in Firebase
-
-//       const chargingSuccess = await updateChargingStatus(true);
-//       if (chargingSuccess) {
-//         toast.success(`Charging initialized for ₹${amount}.`);
-//         router.push("/charge"); // Redirect to charge page
-//       } else {
-//         toast.error("Failed to initialize charging");
-//       }
-//     } catch (error) {
-//       console.error("Error initializing charging:", error);
-//       toast.error("Failed to initialize charging");
-//     } finally {
-//       setIsLoading(false);
-//     }
-//   };
-
-//   return (
-//     <div
-//       className="w-[768px] h-[1024px] overflow-hidden bg-transparent font-sans pt-7"
-//       style={{
-//         backgroundImage: "url(/money-bg.png)",
-//         backgroundSize: "cover",
-//         backgroundPosition: "center",
-//       }}
-//     >
-//       <div className="flex justify-center items-center p-1 pt-40 w-full px-8">
-//         <Card className="w-full max-w-md bg-transparent border-none">
-//           <CardContent className="border-none p-8">
-//             <div className="flex flex-col items-center space-y-8">
-//               <div className="flex items-center space-x-3">
-//                 <IndianRupee className="w-8 h-8 text-red-500" />
-//                 <span className="text-xl font-semibold text-white">
-//                   Select Amount
-//                 </span>
-//                 <TooltipProvider>
-//                   <Tooltip>
-//                     <TooltipTrigger>
-//                       <Info className="w-5 h-5 text-neutral-400" />
-//                     </TooltipTrigger>
-//                     <TooltipContent>
-//                       <p>Select the amount you want to contribute or pay.</p>
-//                     </TooltipContent>
-//                   </Tooltip>
-//                 </TooltipProvider>
-//               </div>
-
-//               <div className="flex gap-2 w-full justify-center">
-//                 {[100, 500, 1000, 5000].map((value) => (
-//                   <Button
-//                     key={value}
-//                     variant="outline"
-//                     size="sm"
-//                     onClick={() => handleQuickSelect(value)}
-//                     className={`px-3 py-1 text-sm ${
-//                       amount === value
-//                         ? "bg-red-500 text-white border-red-500"
-//                         : "text-neutral-400 hover:text-white"
-//                     }`}
-//                   >
-//                     {`₹${value}`}
-//                   </Button>
-//                 ))}
-//               </div>
-
-//               <div className="flex items-center justify-center w-full space-x-8">
-//                 <Button
-//                   variant="outline"
-//                   className="text-black hover:text-white hover:bg-neutral-950 transition-all duration-200 transform hover:scale-110"
-//                   onClick={decrementValue}
-//                 >
-//                   <ChevronLeft className="w-24 h-24 stroke-2" />
-//                 </Button>
-
-//                 <div className="text-7xl font-bold text-white">
-//                   {formatNumber(amount)}
-//                 </div>
-
-//                 <Button
-//                   variant="outline"
-//                   className="text-black hover:text-white hover:bg-neutral-950 transition-all duration-200 transform hover:scale-110"
-//                   onClick={incrementValue}
-//                 >
-//                   <ChevronRight className="w-24 h-24 stroke-2" />
-//                 </Button>
-//               </div>
-
-//               <div className="flex justify-center w-full">
-//                 <Button
-//                   className="w-40 h-12 text-lg bg-red-500 hover:bg-red-600 text-white font-semibold transition-all duration-200 hover:scale-105 disabled:opacity-50"
-//                   onClick={handleSelect}
-//                   disabled={isLoading || amount === 0}
-//                 >
-//                   {isLoading ? "Processing..." : "Confirm"}
-//                 </Button>
-//               </div>
-//             </div>
-//           </CardContent>
-//         </Card>
-//       </div>
-//     </div>
-//   );
-// }

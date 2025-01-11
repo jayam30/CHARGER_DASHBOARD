@@ -96,7 +96,7 @@ const WaveCharging = ({ isChargeInit = true, percentage = 0 }) => {
             background: `radial-gradient(circle at center, ${colors.glow}, transparent 70%)`,
           }}
         />
-
+         
         {/* Main container with premium border effect */}
         <div className="absolute inset-0 rounded-full backdrop-blur-sm">
           {/* Animated border */}

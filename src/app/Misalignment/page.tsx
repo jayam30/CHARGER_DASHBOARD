@@ -1,149 +1,29 @@
-// "use client";
-
-// import { motion } from "framer-motion";
-// import Image from "next/image";
-// import React, { useState, useEffect } from "react";
-// import MisalignmentDialog from "@/components/MisalignmentDialog";
-
-// const MisalignmentDetection = () => {
-//   const [isMisaligned, setIsMisaligned] = useState(false);
-//   const [isScanning, setIsScanning] = useState(false);
-
-//   useEffect(() => {
-//     // Simulate misalignment detection
-//     const detectMisalignment = () => {
-//       setIsScanning(true);
-//       setTimeout(() => {
-//         setIsMisaligned(Math.random() > 0.5);
-//         setIsScanning(false);
-//       }, 3000);
-//     };
-
-//     detectMisalignment();
-//   }, []);
-
-//   return (
-//     <div
-//       className="w-[768px] h-[1024px] overflow-hidden bg-[#2A2D32] font-sans pt-7"
-//       style={{
-//         backgroundImage: "url(/main-bg.png)",
-//         backgroundSize: "cover",
-//         backgroundPosition: "center",
-//       }}
-//     >
-//       {/* Misalignment Dialog */}
-//       <MisalignmentDialog isMisaligned={isMisaligned} />
-
-//       {/* Header Section */}
-//       <div className="flex justify-center items-center p-1 pt-20 w-full px-8">
-//         <motion.div
-//           className="text-left flex-col gap-2 mb-12 relative"
-//           initial={{ opacity: 0 }}
-//           animate={{ opacity: 1 }}
-//           transition={{ duration: 0.3 }}
-//         >
-//           <motion.div
-//             className="text-gray-200 text-4xl font-medium tracking-wide relative group"
-//             initial={{ opacity: 0, x: -20 }}
-//             animate={{ opacity: 1, x: 0 }}
-//             transition={{ duration: 0.5, delay: 0.6 }}
-//           >
-//             <span className="relative inline-block">Misalignment Detection</span>
-//           </motion.div>
-//         </motion.div>
-//       </div>
-
-//       {/* Charging Pad */}
-//       <div className="w-full flex justify-center items-center mb-8">
-//         <div className="relative">
-//           <Image
-//             src="/charger-base.png"
-//             alt="Charging pad"
-//             width={300}
-//             height={300}
-//           />
-//           {isScanning && (
-//             <motion.div
-//               className="absolute top-0 left-0 w-full h-full bg-blue-500 opacity-30"
-//               animate={{
-//                 scale: [1, 1.1, 1],
-//                 opacity: [0.3, 0.1, 0.3],
-//               }}
-//               transition={{
-//                 duration: 2,
-//                 repeat: Infinity,
-//                 ease: "easeInOut",
-//               }}
-//             />
-//           )}
-//           {isMisaligned && (
-//             <motion.div
-//               className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
-//               initial={{ scale: 0 }}
-//               animate={{ scale: 1 }}
-//               transition={{ duration: 0.5 }}
-//             >
-//               <Image
-//                 src="/misalignment-icon.png"
-//                 alt="Misalignment"
-//                 width={50}
-//                 height={50}
-//               />
-//             </motion.div>
-//           )}
-//         </div>
-//       </div>
-
-//       {/* Status Display */}
-//       <div className="w-full flex justify-center items-center">
-//         <motion.div
-//           className={`text-2xl font-bold ${
-//             isScanning
-//               ? "text-blue-400"
-//               : isMisaligned
-//               ? "text-red-500"
-//               : "text-green-500"
-//           }`}
-//           initial={{ opacity: 0 }}
-//           animate={{ opacity: 1 }}
-//           transition={{ duration: 0.5 }}
-//         >
-//           {isScanning
-//             ? "Scanning for misalignment..."
-//             : isMisaligned
-//             ? "Misalignment detected!"
-//             : "Charging pad aligned"}
-//         </motion.div>
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default MisalignmentDetection;
 "use client";
 
 import { motion } from "framer-motion";
 import Image from "next/image";
 import React, { useState, useEffect } from "react";
-import MisalignmentDialog from "@/components/MisalignmentDialog";
+// import MisalignmentDialog from "@/components/MisalignmentDialog";
 
 const MisalignmentDetection = () => {
   const [isMisaligned, setIsMisaligned] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
 
   useEffect(() => {
-    // Simulate misalignment detection
     const detectMisalignment = () => {
       setIsScanning(true);
-      setTimeout(() => {
-        setIsMisaligned(Math.random() > 0.5);
+      const timeoutId = setTimeout(() => {
+        setIsMisaligned(Math.random() > 0.5); // Simulated random misalignment detection
         setIsScanning(false);
       }, 3000);
+
+      return () => clearTimeout(timeoutId); // Cleanup timeout on unmount
     };
 
     detectMisalignment();
   }, []);
 
+ 
   return (
     <div
       className="w-[768px] h-[1024px] overflow-hidden bg-[#2A2D32] font-sans pt-7"
@@ -153,8 +33,7 @@ const MisalignmentDetection = () => {
         backgroundPosition: "center",
       }}
     >
-      <MisalignmentDialog isMisaligned={isMisaligned} />
-
+      {/* Hero Section */}
       <div className="flex justify-center items-center p-1 pt-20 w-full px-8">
         <motion.div
           className="text-left flex-col gap-2 mb-12 relative"
@@ -172,7 +51,8 @@ const MisalignmentDetection = () => {
           </motion.div>
         </motion.div>
       </div>
-
+  
+      {/* Charging Pad */}
       <div className="w-full flex justify-center items-center mb-8">
         <div className="relative">
           <Image
@@ -212,7 +92,8 @@ const MisalignmentDetection = () => {
           )}
         </div>
       </div>
-
+  
+      {/* Status Display */}
       <div className="w-full flex justify-center items-center">
         <motion.div
           className={`text-2xl font-bold ${
@@ -233,8 +114,98 @@ const MisalignmentDetection = () => {
             : "Charging pad aligned"}
         </motion.div>
       </div>
+  
+      {/* Animated Lines */}
+      <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
+        <svg
+          width="768"
+          height="1024"
+          viewBox="0 0 768 1024"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <motion.line
+            x1="0"
+            y1="0"
+            x2="768"
+            y2="0"
+            stroke="url(#paint0_linear)"
+            strokeWidth="2"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 2, ease: "easeInOut" }}
+          />
+          <motion.line
+            x1="768"
+            y1="0"
+            x2="768"
+            y2="1024"
+            stroke="url(#paint1_linear)"
+            strokeWidth="2"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 2, delay: 0.5, ease: "easeInOut" }}
+          />
+          <motion.line
+            x1="768"
+            y1="1024"
+            x2="0"
+            y2="1024"
+            stroke="url(#paint2_linear)"
+            strokeWidth="2"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 2, delay: 1, ease: "easeInOut" }}
+          />
+          <motion.line
+            x1="0"
+            y1="1024"
+            x2="0"
+            y2="0"
+            stroke="url(#paint3_linear)"
+            strokeWidth="2"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 2, delay: 1.5, ease: "easeInOut" }}
+          />
+          <defs>
+            <linearGradient id="paint0_linear" x1="0" y1="0" x2="768" y2="0">
+              <stop stopColor="#2C78FA" />
+              <stop offset="1" stopColor="#24D522" />
+            </linearGradient>
+            <linearGradient
+              id="paint1_linear"
+              x1="768"
+              y1="0"
+              x2="768"
+              y2="1024"
+            >
+              <stop stopColor="#24D522" />
+              <stop offset="1" stopColor="#24BEC7" />
+            </linearGradient>
+            <linearGradient
+              id="paint2_linear"
+              x1="768"
+              y1="1024"
+              x2="0"
+              y2="1024"
+            >
+              <stop stopColor="#24BEC7" />
+              <stop offset="1" stopColor="#2C78FA" />
+            </linearGradient>
+            <linearGradient id="paint3_linear" x1="0" y1="1024" x2="0" y2="0">
+              <stop stopColor="#2C78FA" />
+              <stop offset="1" stopColor="#24D522" />
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
     </div>
   );
+  
+
+
+
 };
 
 export default MisalignmentDetection;
