@@ -1,3 +1,4 @@
+
 "use client";
 
 import WaveCharging from "@/components/WaveCharging";
@@ -14,7 +15,6 @@ import { database } from "@/config/firebase";
 import EmergencyStop from "@/components/EmergencyStop";
 import ChargingPadWarning from "@/components/FodDialog";
 import MisalignmentDialog from "@/components/MisalignmentDialog";
-import { div } from "framer-motion/client";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -23,9 +23,16 @@ const poppins = Poppins({
 
 const Charge = () => {
   const router = useRouter();
-  const { voltage, current, SOC, isReceiverCoilDetected, loading, error } =
-    useBMSData();
-  const { status, resetChargingStatus } = useChargingStatus();
+  const { voltage, current, SOC, isReceiverCoilDetected, loading, error } = useBMSData();
+  const { 
+    status, 
+    resetChargingStatus, 
+    fodTriggered, 
+    misalignmentTriggered, 
+    emergencyStop,
+    updateChargingStatus 
+  } = useChargingStatus();
+  
   const [isScootyParked, setIsScootyParked] = useState(true);
   const {
     timeLeft,
@@ -36,80 +43,36 @@ const Charge = () => {
     isPaused,
     setPausedTimeLeft,
     setPauseTimestamp,
-  } = useChargingTimer(); // Updated to use pause features
-  const [power, setPower] = React.useState<number>(0);
-  const [isFodThere, setIsFodThere] = useState(false);
-  const [energy, setEnergy] = React.useState<number>(0);
-  const [isChargingInitialized, setIsChargingInitialized] =
-    React.useState(false);
+  } = useChargingTimer();
+  
+  const [power, setPower] = useState<number>(0);
+  const [energy, setEnergy] = useState<number>(0);
+  const [isChargingInitialized, setIsChargingInitialized] = useState(false);
   const [unparkStartTime, setUnparkStartTime] = useState<number | null>(null);
-  const [parkCountdown, setParkCountdown] = useState<number>(60); // 60 seconds
-  const [isEmergencyStop, setIsEmergencyStop] = useState(false);
-  const [isMisaligned, setIsMisaligned] = useState(false);
-
-
-  // Format time helper function
-  const formatTime = (value: number) => value.toString().padStart(2, "0");
-
-  console.log("Emergency: ", isEmergencyStop);
+  const [parkCountdown, setParkCountdown] = useState<number>(60);
 
   // Effect for Firebase listeners
   useEffect(() => {
     try {
       const coilRef = ref(database, "IsReceiverCoilDetected");
-      const fodRef = ref(database, "Is_FOD_Present");
-      const emergencyStopRef = ref(database, "emergencyStop");
-      const misalignmentRef = ref(database, "isMisaligned");
-      console.log("test", misalignmentRef);
-
-
-      // Separate listeners for better cleanup and independence
       const unsubscribeCoil = onValue(coilRef, (coilSnapshot) => {
         const isCoilDetected = coilSnapshot.val();
         setIsScootyParked(isCoilDetected);
       });
 
-      const unsubscribeFod = onValue(fodRef, (fodSnapshot) => {
-        const isFodPresent = fodSnapshot.val();
-        setIsFodThere(isFodPresent);
-      });
-
-      const unsubscribeEmergency = onValue(
-        emergencyStopRef,
-        (emergencySnapshot) => {
-          const emergencyValue = emergencySnapshot.val();
-          // console.log("snap from test:", emergencySnapshot);
-          // console.log("Emergency value from Firebase:", emergencyValue);
-          setIsEmergencyStop(emergencyValue);
-        }
-      );
-      const unsubscribeMisalignment = onValue(
-        misalignmentRef,
-        (misalignmentSnapshot) => {
-          const isMisaligned = misalignmentSnapshot.val();
-          console.log("snap from test:", misalignmentSnapshot);
-          console.log("Emergency value from test:", isMisaligned);
-          setIsMisaligned(isMisaligned);
-        }
-      );
       return () => {
         unsubscribeCoil();
-        unsubscribeFod();
-        unsubscribeEmergency();
-        unsubscribeMisalignment();  
       };
     } catch (error) {
       console.error("Error setting up Firebase listeners:", error);
     }
-  }, []); 
+  }, []);
+
+  // Effect for handling charging time
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
-    if (
-      status?.isChargingInitialized &&
-      status?.duration?.endTime &&
-      !isPaused
-    ) {
+    if (status?.isChargingInitialized && status?.duration?.endTime && !isPaused) {
       interval = setInterval(() => {
         const now = Date.now();
         const endTime = status.duration.endTime!;
@@ -124,20 +87,17 @@ const Charge = () => {
           router.push("/done");
           return;
         }
-        // Convert milliseconds to hours, minutes, seconds
+
         const hours = Math.floor(difference / (1000 * 60 * 60));
-        const minutes = Math.floor(
-          (difference % (1000 * 60 * 60)) / (1000 * 60)
-        );
+        const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
         const seconds = Math.floor((difference % (1000 * 60)) / 1000);
 
         setTimeLeft({ hours, minutes, seconds });
 
-        // Calculate and update energy only if charging is active
-        if (isChargingInitialized && !isFodThere && current > 0) {
+        // Only calculate energy if all safety conditions are met
+        if (isChargingInitialized && !fodTriggered && !misalignmentTriggered && !emergencyStop && current > 0) {
           const calculatedPower = Number((voltage * current).toFixed(2));
           const powerInKW = calculatedPower / 1000;
-          // Energy accumulated per second (1/3600 of an hour)
           const calculatedEnergy = powerInKW / 3600;
           setEnergy((prev) => Number((prev + calculatedEnergy).toFixed(6)));
         }
@@ -155,25 +115,28 @@ const Charge = () => {
     resetChargingStatus,
     isPaused,
     isChargingInitialized,
-    isFodThere,
-    isMisaligned,
+    fodTriggered,
+    misalignmentTriggered,
+    emergencyStop,
     current,
     voltage,
   ]);
 
-  // Remove or modify the existing useEffect that was calculating power and energy
+  // Effect for power calculations
   useEffect(() => {
     setPower(0);
     if (loading || error || !voltage || !current || SOC === undefined) {
       return;
     }
 
-    if (current > 0.001) {
-      status.isChargingInitialized = true;
+    // Only initialize charging if safety conditions are met
+    if (current > 0.001 && !fodTriggered && !misalignmentTriggered && !emergencyStop) {
+      updateChargingStatus(true);
       setIsChargingInitialized(true);
     } else {
       setPower(0);
     }
+
     try {
       const calculatedPower = Number((voltage * current).toFixed(2));
       setPower(calculatedPower);
@@ -181,58 +144,42 @@ const Charge = () => {
       console.error("Calculation error:", err);
       setPower(0);
     }
-  }, [voltage, current, SOC, loading, error]);
+  }, [voltage, current, SOC, loading, error, fodTriggered, misalignmentTriggered, emergencyStop]);
 
-  // Updated effect for parking status with timer pause
-  // useEffect(() => {
-  //   if (isScootyParked === false || isFodThere === true || isMisaligned === true) {
-  //     pauseTimer(); // Pause the timer when misalignment is detected
-  //   } else if (current <= 0) {
-  //     pauseTimerOnly();
-  //   } else {
-  //     resumeTimer();
-  //   }
-  // }, [isScootyParked, isFodThere, isMisaligned, router, pauseTimer, resumeTimer]);
+  // Effect for handling safety conditions
   useEffect(() => {
-    if (isScootyParked === false || isFodThere === true || isMisaligned === true) {
-      pauseTimer(); // Pause the timer
-      setIsChargingInitialized(false); // Stop charging
-      setPower(0); // Reset power to 0
+    if (!isScootyParked || fodTriggered || misalignmentTriggered || emergencyStop) {
+      pauseTimer();
+      setIsChargingInitialized(false);
+      setPower(0);
+      updateChargingStatus(false);
     } else if (current <= 0) {
       pauseTimerOnly();
     } else {
       resumeTimer();
     }
-  }, [isScootyParked, isFodThere, isMisaligned, pauseTimer, resumeTimer]);
-  useEffect(() => {
-    if (isFodThere || isMisaligned) {
-      setEnergy(0);
-    }
-  }, [isFodThere, isMisaligned]);
-  useEffect(() => {
-    if (isFodThere || isMisaligned) {
-      set(ref(database, "chargingStatus"), false); // Set charging status to false
-    }
-  }, [isFodThere, isMisaligned]);
-  
-  
-  
+  }, [isScootyParked, fodTriggered, misalignmentTriggered, emergencyStop]);
 
-  // Add this new effect to handle unpark timing and countdown
+  // Effect for resetting energy when safety conditions are triggered
+  useEffect(() => {
+    if (fodTriggered || misalignmentTriggered || emergencyStop) {
+      setEnergy(0);
+      set(ref(database, "chargingStatus"), false);
+    }
+  }, [fodTriggered, misalignmentTriggered, emergencyStop]);
+
+  // Effect for handling unpark countdown
   useEffect(() => {
     let countdownInterval: NodeJS.Timeout;
 
     if (!isScootyParked) {
-      // Set the initial unpark time if not already set
       if (!unparkStartTime) {
         setUnparkStartTime(Date.now());
       }
 
-      // Start countdown timer
       countdownInterval = setInterval(() => {
         setParkCountdown((prev) => {
           if (prev <= 1) {
-            // Reset everything and redirect
             resetChargingStatus();
             setTimeLeft({ hours: 0, minutes: 0, seconds: 0 });
             setPausedTimeLeft(null);
@@ -246,7 +193,6 @@ const Charge = () => {
         });
       }, 1000);
     } else {
-      // Reset the unpark timer and countdown when scooter is parked
       setUnparkStartTime(null);
       setParkCountdown(60);
     }
@@ -258,28 +204,19 @@ const Charge = () => {
     };
   }, [isScootyParked, unparkStartTime, resetChargingStatus, router]);
 
-  useEffect(() => {
-    console.log("Emergency Stop State Changed:", isEmergencyStop);
-  }, [isEmergencyStop]);
-
   if (loading) {
-    return (
-      <div className="w-[768px] h-[1024px] flex items-center justify-center bg-[#2A2D32]">
-        Loading...
-      </div>
-    );
+    return <div className="w-[768px] h-[1024px] flex items-center justify-center bg-[#2A2D32]">Loading...</div>;
   }
 
   if (error) {
-    return (
-      <div className="w-[768px] h-[1024px] flex items-center justify-center bg-[#2A2D32]">
-        Error: {error}
-      </div>
-    );
+    return <div className="w-[768px] h-[1024px] flex items-center justify-center bg-[#2A2D32]">Error: {error}</div>;
   }
+//jayam test
+  const formatTime = (value: number): string => {
+    return value.toString().padStart(2, "0");
+  };
 
   return (
-
 
     <div
       className="w-[768px] h-[1024px] overflow-hidden bg-[#2A2D32] font-sans pt-7"
@@ -332,10 +269,10 @@ const Charge = () => {
         </motion.div>
       </div>
 
-      <ChargingPadWarning isFodThere={isFodThere} />
+      <ChargingPadWarning isFodThere={fodTriggered} />
     
       {/* misalignment */}
-      <MisalignmentDialog isMisaligned={isMisaligned} />
+      <MisalignmentDialog isMisaligned={misalignmentTriggered} />
 
       
       
@@ -429,11 +366,13 @@ const Charge = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 1.2 }}
           >
+            
+            
             Time Remaining:{" "}
             <span className="group-hover:text-cyan-400/90 transition-colors duration-300">
               {formatTime(timeLeft.hours)}:{formatTime(timeLeft.minutes)}:
               {formatTime(timeLeft.seconds)}
-            </span>
+            </span> 
           </motion.div>
 
           <motion.div
@@ -461,7 +400,7 @@ const Charge = () => {
           </motion.div>
         </div>
       </div>
-      {isEmergencyStop && <EmergencyStop isEmergencyStop={isEmergencyStop} />}
+      {emergencyStop && <EmergencyStop isEmergencyStop={emergencyStop} />}
     </div>
   );
   
