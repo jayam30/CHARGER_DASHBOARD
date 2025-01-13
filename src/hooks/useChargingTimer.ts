@@ -46,7 +46,9 @@ export const useChargingTimer = (): ChargingTimerReturn => {
           (difference % (1000 * 60 * 60)) / (1000 * 60)
         );
         const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+        console.log("hours", hours, "minutes", minutes, "seconds", seconds);
         setTimeLeft({ hours, minutes, seconds });
+      
       }
     }
   }, [status?.duration?.endTime]);

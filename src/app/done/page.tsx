@@ -1,13 +1,15 @@
+
 "use client";
 import React, { useEffect, useState } from "react";
-import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { database } from "@/config/firebase";
 import { ref, onValue } from "firebase/database";
-import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 const Page = () => {
   const router = useRouter();
   const [isScootyParked, setIsScootyParked] = useState(true);
+
   useEffect(() => {
     try {
       const coilRef = ref(database, "IsReceiverCoilDetected");
@@ -30,16 +32,22 @@ const Page = () => {
         });
       });
 
+      // Set a timeout to redirect after 10 seconds
+      const timer = setTimeout(() => {
+        router.push("/");
+      }, 10000); // 10000 milliseconds = 10 seconds
+
       return () => {
         unsubscribeCoil();
         if (unsubscribeFod) {
           unsubscribeFod();
         }
+        clearTimeout(timer); // Clean up the timer on component unmount
       };
     } catch (error) {
       console.error("Error setting up Firebase listeners:", error);
     }
-  }, []);
+  }, [router]);
 
   return (
     <div
@@ -74,7 +82,7 @@ const Page = () => {
           Your vehicle is ready to go!
         </div>
         <div className="pt-12">
-          <Image
+        <Image
             src="/charge-bike.png"
             alt="Charger pad"
             width={700}

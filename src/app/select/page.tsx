@@ -14,16 +14,122 @@ interface ChargingOption {
   route: string; // Add a route property for each option
 }
 
+// const Select = () => {
+//   const router = useRouter();
+//   const [isScootyParked, setIsScootyParked] = useState(true);
+//   const [isFodThere, setIsFodThere] = useState(false);
+//   const { isReceiverCoilDetected } = useBMSData();
+
+//   const options: ChargingOption[] = [
+//     { id: 1, text: "Charge by %", route: "/soc" },
+//     { id: 2, text: "Charge by Time", route: "/select-time" },
+//     { id: 3, text: "Charge by ₹", route: "/money" },
+//   ];
+
+//   const handleSelect = (route: string) => {
+//     router.push(route); // Redirect to the corresponding route
+//   };
+
+//   useEffect(() => {
+//     try {
+//       const coilRef = ref(database, "IsReceiverCoilDetected");
+//       const fodRef = ref(database, "Is_FOD_Present");
+
+//       let unsubscribeFod: (() => void) | undefined;
+
+//       const unsubscribeCoil = onValue(coilRef, (coilSnapshot) => {
+//         if (unsubscribeFod) {
+//           unsubscribeFod();
+//         }
+
+//         unsubscribeFod = onValue(fodRef, (fodSnapshot) => {
+//           const isCoilDetected = coilSnapshot.val();
+//           const isFodPresent = fodSnapshot.val();
+
+//           setIsScootyParked(isCoilDetected);
+//           setIsFodThere(isFodPresent);
+//         });
+//       });
+
+//       return () => {
+//         unsubscribeCoil();
+//         if (unsubscribeFod) {
+//           unsubscribeFod();
+//         }
+//       };
+//     } catch (error) {
+//       console.error("Error setting up Firebase listeners:", error);
+//     }
+//   }, []);
+
+//   if (isScootyParked === false) {
+//     router.push("/park");
+//   }
+
+//   return (
+//     <div
+//       className="w-[768px] h-[1024px] overflow-hidden bg-[#2A2D32] font-sans pt-7"
+//       style={{
+//         backgroundImage: "url(/main-bg.png)",
+//         backgroundSize: "cover",
+//         backgroundPosition: "center",
+//       }}
+//     >
+//       <ChargingPadWarning isFodThere={isFodThere} />
+//       <div className="flex justify-center items-center p-1 pt-40 w-full px-8">
+//         <motion.div
+//           className="text-left flex-col gap-2 mb-24 relative w-full max-w-md"
+//           initial={{ opacity: 0 }}
+//           animate={{ opacity: 1 }}
+//           transition={{ duration: 0.3 }}
+//         >
+//           <motion.div
+//             className="text-gray-200 text-5xl font-medium tracking-wide relative group mb-16"
+//             initial={{ opacity: 0, x: -20 }}
+//             animate={{ opacity: 1, x: 0 }}
+//             transition={{ duration: 0.5, delay: 0.6 }}
+//           >
+//             <span className="relative inline-block">Charge your EV by</span>
+//           </motion.div>
+
+//           <div className="flex justify-center items-center w-full">
+//             <div className="flex flex-col gap-10 w-80">
+//               {options.map((option) => (
+//                 <button
+//                   className="shadow-[inset_0_0_0_2px_#616467] text-black px-12 py-7 rounded-full tracking-widest uppercase font-bold bg-transparent hover:bg-[#616467] hover:text-white dark:text-neutral-200 transition duration-200 text-lg"
+//                   key={option.id}
+//                   onClick={() => handleSelect(option.route)} // Pass the route to the handler
+//                 >
+//                   <div className="w-full text-white flex justify-between">
+//                     {option.text}
+//                     <div>
+//                       <Zap className="text-cyan-300 w-7 h-7" />
+//                     </div>
+//                   </div>
+//                 </button>
+//               ))}
+//             </div>
+//           </div>
+//         </motion.div>
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default Select;
+
 const Select = () => {
   const router = useRouter();
   const [isScootyParked, setIsScootyParked] = useState(true);
   const [isFodThere, setIsFodThere] = useState(false);
   const { isReceiverCoilDetected } = useBMSData();
+  const [isMisaligned, setIsMisaligned] = useState(false);
+
 
   const options: ChargingOption[] = [
-    { id: 1, text: "Charge by %", route: "/soc" },
-    { id: 2, text: "Charge by Time", route: "/select-time" },
-    { id: 3, text: "Charge by ₹", route: "/money" },
+    { id: 1, text: "Percent", route: "/soc" },
+    { id: 2, text: "Time", route: "/select-time" },
+    { id: 3, text: "Money", route: "/money" },
   ];
 
   const handleSelect = (route: string) => {
@@ -34,17 +140,21 @@ const Select = () => {
     try {
       const coilRef = ref(database, "IsReceiverCoilDetected");
       const fodRef = ref(database, "Is_FOD_Present");
+      const misalignmentRef = ref(database, "Is_Misalignment");
 
       let unsubscribeFod: (() => void) | undefined;
+      let unsubscribeMisalignment: (() => void) | undefined;
 
       const unsubscribeCoil = onValue(coilRef, (coilSnapshot) => {
         if (unsubscribeFod) {
           unsubscribeFod();
         }
+        
 
         unsubscribeFod = onValue(fodRef, (fodSnapshot) => {
           const isCoilDetected = coilSnapshot.val();
           const isFodPresent = fodSnapshot.val();
+          
 
           setIsScootyParked(isCoilDetected);
           setIsFodThere(isFodPresent);
@@ -108,6 +218,15 @@ const Select = () => {
                   </div>
                 </button>
               ))}
+              {/* Add Home Button */}
+              <button
+                className="shadow-[inset_0_0_0_2px_#616467] text-black px-12 py-7 rounded-full tracking-widest uppercase font-bold bg-transparent hover:bg-[#616467] hover:text-white dark:text-neutral-200 transition duration-200 text-lg"
+                onClick={() => handleSelect("/")} // Redirect to the home page
+              >
+                <div className="w-full text-white flex justify-center">
+                <span className="text-lg font-semibold">Home</span>
+                </div>
+              </button>
             </div>
           </div>
         </motion.div>
@@ -117,7 +236,6 @@ const Select = () => {
 };
 
 export default Select;
-
 
 
 

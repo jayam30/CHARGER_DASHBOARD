@@ -1,0 +1,1944 @@
+
+// "use client";
+
+// import WaveCharging from "@/components/WaveCharging";
+// import { motion } from "framer-motion";
+// import React, { useEffect, useState } from "react";
+// import Image from "next/image";
+// import { Poppins } from "next/font/google";
+// import { useBMSData } from "@/hooks/useBMSData";
+// import { useChargingTimer } from "@/hooks/useChargingTimer";
+// import { useRouter } from "next/navigation";
+// import { useChargingStatus } from "@/hooks/useChargingStatus";
+// import { onValue, ref, set } from "firebase/database";
+// import { database } from "@/config/firebase";
+// import EmergencyStop from "@/components/EmergencyStop";
+// import ChargingPadWarning from "@/components/FodDialog";
+// import MisalignmentDialog from "@/components/MisalignmentDialog";
+
+// const poppins = Poppins({
+//   subsets: ["latin"],
+//   weight: ["500"],
+// });
+
+// const Charge = () => {
+//   const router = useRouter();
+//   const { voltage, current, SOC, isReceiverCoilDetected, loading, error } = useBMSData();
+//   const {
+//     status,
+//     resetChargingStatus,
+//     fodTriggered,
+//     misalignmentTriggered,
+//     emergencyStop,
+//     updateChargingStatus
+//   } = useChargingStatus();
+  
+//   const [isScootyParked, setIsScootyParked] = useState(true);
+//   const {
+//     timeLeft,
+//     setTimeLeft,
+//     pauseTimer,
+//     resumeTimer,
+//     pauseTimerOnly,
+//     isPaused,
+//     setPausedTimeLeft,
+//     setPauseTimestamp,
+//   } = useChargingTimer();
+  
+//   // const [power, setPower] = useState<number>(0);
+//   const [power, setPower] = React.useState<number>(0);
+//   const [energy, setEnergy] = useState<number>(0);
+//   const [isChargingInitialized, setIsChargingInitialized] = useState(false);
+//   const [unparkStartTime, setUnparkStartTime] = useState<number | null>(null);
+//   // const [unparkStartTime, setUnparkStartTime] = useState<number | null>(null);
+
+//   const [parkCountdown, setParkCountdown] = useState<number>(60);
+//   const [isEmergencyStop, setIsEmergencyStop] = useState(false); //after misalignment
+//   const formatTime = (value: number): string => {
+//     return value.toString().padStart(2, "0");
+//   };
+//   // Effect for Firebase listeners
+
+//   // bhai check this useeffect
+//   useEffect(() => {
+//     try {
+//       const coilRef = ref(database, "IsReceiverCoilDetected");
+//       const unsubscribeCoil = onValue(coilRef, (coilSnapshot) => {
+//         const isCoilDetected = coilSnapshot.val();
+//         setIsScootyParked(isCoilDetected);
+//       });
+
+//       return () => {
+//         unsubscribeCoil();
+//       };
+//     } catch (error) {
+//       console.error("Error setting up Firebase listeners:", error);
+//     }
+//   }, []);
+
+//   // Effect for handling charging time
+//   useEffect(() => {
+//     let interval: NodeJS.Timeout;
+
+//     if (status?.isChargingInitialized && status?.duration?.endTime && !isPaused) {
+//       interval = setInterval(() => {
+//         const now = Date.now();
+//         const endTime = status.duration.endTime!;
+//         const difference = endTime - now;
+
+//         if (difference <= 0) {
+//           clearInterval(interval);
+//           resetChargingStatus();
+//           setTimeLeft({ hours: 0, minutes: 0, seconds: 0 });
+//           setPausedTimeLeft(null);
+//           setPauseTimestamp(null);
+//           router.push("/done");
+//           return;
+//         }
+
+//         const hours = Math.floor(difference / (1000 * 60 * 60));
+//         const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+//         const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+
+//         setTimeLeft({ hours, minutes, seconds });
+
+//         // Only calculate energy if all safety conditions are met
+//         if (isChargingInitialized && !fodTriggered && !misalignmentTriggered && !emergencyStop && current > 0) {
+//           const calculatedPower = Number((voltage * current).toFixed(2));
+//           const powerInKW = calculatedPower / 1000;
+//           const calculatedEnergy = powerInKW / 3600;
+//           setEnergy((prev) => Number((prev + calculatedEnergy).toFixed(6)));
+//         }
+//       }, 1000);
+//     }
+
+//     return () => {
+//       if (interval) {
+//         clearInterval(interval);
+//       }
+//     };
+//   }, [
+//     status?.isChargingInitialized,
+//     status?.duration?.endTime,
+//     resetChargingStatus,
+//     isPaused,
+//     isChargingInitialized,
+//     fodTriggered,
+//     misalignmentTriggered,
+//     emergencyStop,
+//     current,
+//     voltage,
+//   ]);
+
+//   // Effect for power calculations
+//   useEffect(() => {
+//     setPower(0);
+//     if (loading || error || !voltage || !current || SOC === undefined) {
+//       return;
+//     }
+
+//     // Only initialize charging if safety conditions are met
+//     if (current > 0.001 && !fodTriggered && !misalignmentTriggered && !emergencyStop) {
+//       updateChargingStatus(true);
+//       setIsChargingInitialized(true);
+//     } else {
+//       setPower(0);
+//     }
+
+//     try {
+//       const calculatedPower = Number((voltage * current).toFixed(2));
+//       setPower(calculatedPower);
+//     } catch (err) {
+//       console.error("Calculation error:", err);
+//       setPower(0);
+//     }
+//   }, [voltage, current, SOC, loading, error, fodTriggered, misalignmentTriggered, emergencyStop]);
+
+//   // Effect for handling safety conditions
+
+//   //this logic needs to be checked
+//   useEffect(() => {
+//     if (!isScootyParked || fodTriggered || misalignmentTriggered || emergencyStop) {
+//       pauseTimer();
+//       setIsChargingInitialized(false);
+//       setPower(0);
+//       updateChargingStatus(false);
+//     } else if (current <= 0) {
+//       pauseTimerOnly();
+//     } else {
+//       resumeTimer();
+//     }
+//   }, [isScootyParked, fodTriggered, misalignmentTriggered, emergencyStop,  pauseTimer, router]);
+
+//   // Effect for resetting energy when safety conditions are triggered
+//   useEffect(() => {
+//     if (fodTriggered || misalignmentTriggered || emergencyStop) {
+//       setEnergy(0);
+//       set(ref(database, "chargingStatus"), false);
+//     }
+//   }, [fodTriggered, misalignmentTriggered, emergencyStop]);
+
+//   // Effect for handling unpark countdown
+//   useEffect(() => {
+//     let countdownInterval: NodeJS.Timeout;
+
+//     if (!isScootyParked) {
+//       if (!unparkStartTime) {
+//         setUnparkStartTime(Date.now());
+//       }
+//        // Start countdown timer
+//       countdownInterval = setInterval(() => {
+//         setParkCountdown((prev) => {
+//           if (prev <= 1) {
+//             // Reset everything and redirect
+//             resetChargingStatus();
+//             setTimeLeft({ hours: 0, minutes: 0, seconds: 0 });
+//             setPausedTimeLeft(null);
+//             setPauseTimestamp(null);
+//             setIsChargingInitialized(false);
+//             setEnergy(0);
+//             router.push("/");
+//             return 0;
+//           }
+//           return prev - 1;
+//         });
+//       }, 1000);
+//     } else {
+//       // Reset the unpark timer and countdown when scooter is parked
+//       setUnparkStartTime(null);
+//       setParkCountdown(60);
+//     }
+
+//     return () => {
+//       if (countdownInterval) {
+//         clearInterval(countdownInterval);
+//       }
+//     };
+//   }, [isScootyParked, unparkStartTime, resetChargingStatus, router]);
+
+//   useEffect(() => {
+//     console.log("Emergency Stop State Changed:", isEmergencyStop);
+//   }, [emergencyStop]);
+
+//   if (loading) {
+//     return <div className="w-[768px] h-[1024px] flex items-center justify-center bg-[#2A2D32]">Loading...</div>;
+//   }
+
+//   if (error) {
+//     return <div className="w-[768px] h-[1024px] flex items-center justify-center bg-[#2A2D32]">Error: {error}</div>;
+//   }
+// //jayam test
+
+
+//   return (
+
+//     <div
+//       className="w-[768px] h-[1024px] overflow-hidden bg-[#2A2D32] font-sans pt-7"
+//       style={{
+//         backgroundImage: "url(/main-bg.png)",
+//         backgroundSize: "cover",
+//         backgroundPosition: "center",
+//       }}
+//     >
+     
+//       <div className="flex justify-center items-center p-1 pt-20 w-full px-8">
+//         <motion.div
+//           className="text-left flex-col gap-2 mb-12 relative"
+//           initial={{ opacity: 0 }}
+//           animate={{ opacity: 1 }}
+//           transition={{ duration: 0.3 }}
+//         >
+//           <motion.div
+//             className="text-white/90 text-5xl font-medium tracking-wider relative group"
+//             initial={{ opacity: 0, x: -20 }}
+//             animate={{ opacity: 1, x: 0 }}
+//             transition={{ duration: 0.5, delay: 0.6 }}
+//           >
+//             <span
+//               className={`${poppins.className} relative ${
+//                 isScootyParked ? "" : "text-white"
+//               }`}
+//             >
+//               {isScootyParked ? (
+//                 isChargingInitialized ? (
+//                   current <= 0 ? (
+//                     "Charging Paused"
+//                   ) : (
+//                     "Charging"
+//                   )
+//                 ) : (
+//                   "Initializing Charging"
+//                 )
+//               ) : (
+//                 <div className="flex items-center gap-3">
+//                   <span>Park your vehicle</span>
+//                   <span className="text-red-400 font-mono bg-red-500/10 px-3 py-0.5 rounded-md border border-red-500/20">
+//                     {Math.floor(parkCountdown / 60)}:
+//                     {(parkCountdown % 60).toString().padStart(2, "0")}
+//                   </span>
+//                 </div>
+//               )}
+//             </span>
+//           </motion.div>
+//         </motion.div>
+//       </div>
+
+//       <ChargingPadWarning isFodThere={fodTriggered} />
+    
+//       {/* misalignment */}
+//       <MisalignmentDialog isMisaligned={misalignmentTriggered} />
+
+      
+      
+//       {/* /misalignmentSnapshot */}
+    
+
+//       <div className="flex flex-col items-center gap-6 mb-12 scale-150">
+//         <motion.div
+//           className="inline-flex items-center gap-2 px-4 py-2 bg-black/60 backdrop-blur-md rounded-full border border-white/5 shadow-lg shadow-cyan-500/10"
+//           initial={{ opacity: 0, y: 20 }}
+//           animate={{ opacity: 1, y: 0 }}
+//           transition={{ duration: 0.5, delay: 0.8 }}
+//         >
+//           <span className="text-white/90 text-sm font-medium">
+//             {SOC + "% "}Charged
+//           </span>
+//           <svg
+//             width="14"
+//             height="14"
+//             viewBox="0 0 24 24"
+//             fill="none"
+//             xmlns="http://www.w3.org/2000/svg"
+//             className="text-cyan-400"
+//           >
+//             <path
+//               d="M13 2L4.09347 12.6879C3.74466 13.1064 3.57026 13.3157 3.56759 13.4925C3.56526 13.6461 3.63373 13.7923 3.75326 13.8889C3.89075 14 4.16318 14 4.70803 14H12L11 22L19.9065 11.3121C20.2553 10.8936 20.4297 10.6843 20.4324 10.5075C20.4347 10.3539 20.3663 10.2077 20.2467 10.1111C20.1092 10 19.8368 10 19.292 10H12L13 2Z"
+//               stroke="currentColor"
+//               strokeWidth="2"
+//               strokeLinecap="round"
+//               strokeLinejoin="round"
+//             />
+//           </svg>
+//         </motion.div>
+//       </div>
+
+//       <WaveCharging isChargeInit={isChargingInitialized} percentage={SOC} />
+
+//       <div className="flex w-full justify-center items-center mb-4">
+//         <div className="flex-col justify-center items-center gap-36">
+//           <motion.div
+//             initial={{ x: 768 }}
+//             animate={{ x: 0 }}
+//             key={isScootyParked ? "parked" : "not-parked"}
+//             transition={{
+//               duration: 5,
+//               type: "spring",
+//               stiffness: 100,
+//               damping: 100,
+//               repeat: isScootyParked ? 0 : Infinity,
+//             }}
+//           >
+          
+//               <Image
+//                 src="/charge-bike.png"
+//                 alt="Charger pad"
+//                 width={500}
+//                 height={300}
+//                 className="drop-shadow-[0_0_15px_rgba(6,182,212,0.15)]"
+//               />
+//           </motion.div>
+           
+//           <div className="flex w-full items-center justify-center">
+//             <Image
+//               src="/charge-pad.png"
+//               alt="Charger pad"
+//               width={200}
+//               height={100}
+//               className="drop-shadow-[0_0_15px_rgba(6,182,212,0.15)]"
+//             />
+//           </div>
+//         </div>
+//       </div>
+
+//       <div className="w-full px-12 mt-7">
+//         <div className="grid grid-cols-2 gap-6">
+//           <motion.div
+//             className="group shadow-[0_0_0_1px_rgba(255,255,255,0.1)_inset] px-8 py-4 bg-black/20 backdrop-blur-sm rounded-lg text-gray-400 text-xl font-bold w-full text-center hover:shadow-[0_0_0_1px_rgba(6,182,212,0.2)_inset] transition-all duration-300 hover:bg-black/30"
+//             initial={{ opacity: 0, y: 20 }}
+//             animate={{ opacity: 1, y: 0 }}
+//             transition={{ duration: 0.5, delay: 1.0 }}
+//           >
+//             <span className="text-nowrap">Energy: </span>
+//             <span className="group-hover:text-cyan-400/90 transition-colors duration-300 text-nowrap">
+//               {energy.toFixed(5)} kWh
+//             </span>
+//           </motion.div>
+
+//           <motion.div
+//             className="group shadow-[0_0_0_1px_rgba(255,255,255,0.1)_inset] px-8 py-4 bg-black/20 backdrop-blur-sm rounded-lg text-gray-400 text-xl font-bold w-full text-center hover:shadow-[0_0_0_1px_rgba(6,182,212,0.2)_inset] transition-all duration-300 hover:bg-black/30"
+//             initial={{ opacity: 0, y: 20 }}
+//             animate={{ opacity: 1, y: 0 }}
+//             transition={{ duration: 0.5, delay: 1.2 }}
+//           >
+            
+            
+//             Time Remaining:{" "}
+//             <span className="group-hover:text-cyan-400/90 transition-colors duration-300">
+//               {formatTime(timeLeft.hours)}:{formatTime(timeLeft.minutes)}:
+//               {formatTime(timeLeft.seconds)}
+//             </span>
+//           </motion.div>
+
+//           <motion.div
+//             className="group shadow-[0_0_0_1px_rgba(255,255,255,0.1)_inset] px-8 py-4 bg-black/20 backdrop-blur-sm rounded-lg text-gray-400 text-xl font-bold w-full text-center hover:shadow-[0_0_0_1px_rgba(6,182,212,0.2)_inset] transition-all duration-300 hover:bg-black/30"
+//             initial={{ opacity: 0, y: 20 }}
+//             animate={{ opacity: 1, y: 0 }}
+//             transition={{ duration: 0.5, delay: 1.4 }}
+//           >
+//             Charging Current:{" "}
+//             <span className="group-hover:text-cyan-400/90 transition-colors duration-300">
+//               {current.toFixed(2)} A
+//             </span>
+//           </motion.div>
+
+//           <motion.div
+//             className="group shadow-[0_0_0_1px_rgba(255,255,255,0.1)_inset] px-8 py-4 bg-black/20 backdrop-blur-sm rounded-lg text-gray-400 text-xl font-bold w-full text-center hover:shadow-[0_0_0_1px_rgba(6,182,212,0.2)_inset] transition-all duration-300 hover:bg-black/30"
+//             initial={{ opacity: 0, y: 20 }}
+//             animate={{ opacity: 1, y: 0 }}
+//             transition={{ duration: 0.5, delay: 1.6 }}
+//           >
+//             Power:{" "}
+//             <span className="group-hover:text-cyan-400/90 transition-colors duration-300">
+//               {power} W
+//             </span>
+//           </motion.div>
+//         </div>
+//       </div>
+//       {emergencyStop && <EmergencyStop isEmergencyStop={emergencyStop} />}
+//     </div>
+//   );
+  
+// };
+
+// export default Charge;
+
+// "use client";
+
+// import WaveCharging from "@/components/WaveCharging";
+// import { motion } from "framer-motion";
+// import React, { useEffect, useState } from "react";
+// import Image from "next/image";
+// import { Poppins } from "next/font/google";
+// import { useBMSData } from "@/hooks/useBMSData";
+// import { useChargingTimer } from "@/hooks/useChargingTimer";
+// import { useRouter } from "next/navigation";
+// import { useChargingStatus } from "@/hooks/useChargingStatus";
+// import { onValue, ref, set } from "firebase/database";
+// import { database } from "@/config/firebase";
+// import EmergencyStop from "@/components/EmergencyStop";
+// import ChargingPadWarning from "@/components/FodDialog";
+// import MisalignmentDialog from "@/components/MisalignmentDialog";
+
+// const poppins = Poppins({
+//   subsets: ["latin"],
+//   weight: ["500"],
+// });
+
+// const Charge = () => {
+//   const router = useRouter();
+//   const { voltage, current, SOC, isReceiverCoilDetected, loading, error } = useBMSData();
+//   const {
+//     status,
+//     resetChargingStatus,
+//     fodTriggered,
+//     misalignmentTriggered,
+//     emergencyStop,
+//     updateChargingStatus
+//   } = useChargingStatus();
+  
+//   const [isScootyParked, setIsScootyParked] = useState(true);
+//   const {
+//     timeLeft,
+//     setTimeLeft,
+//     pauseTimer,
+//     resumeTimer,
+//     pauseTimerOnly,
+//     isPaused,
+//     setPausedTimeLeft,
+//     setPauseTimestamp,
+//   } = useChargingTimer();
+  
+//   const [power, setPower] = useState<number>(0);
+//   const [energy, setEnergy] = useState<number>(0);
+//   const [isChargingInitialized, setIsChargingInitialized] = useState(false);
+//   const [unparkStartTime, setUnparkStartTime] = useState<number | null>(null);
+//   const [parkCountdown, setParkCountdown] = useState<number>(60);
+
+//   // Effect for Firebase listeners
+//   useEffect(() => {
+//     try {
+//       const coilRef = ref(database, "IsReceiverCoilDetected");
+//       const unsubscribeCoil = onValue(coilRef, (coilSnapshot) => {
+//         const isCoilDetected = coilSnapshot.val();
+//         setIsScootyParked(isCoilDetected);
+//       });
+
+//       return () => {
+//         unsubscribeCoil();
+//       };
+//     } catch (error) {
+//       console.error("Error setting up Firebase listeners:", error);
+//     }
+//   }, []);
+//   useEffect(() => {
+//     if (status?.isChargingInitialized) {
+//       // If any safety condition is triggered, pause charging but keep timer state
+//       if (!isScootyParked || fodTriggered || misalignmentTriggered || emergencyStop) {
+//         pauseTimer();
+//         setIsChargingInitialized(false);
+//         setPower(0);
+//       } else if (current <= 0) {
+//         // If current drops but safety is ok, just pause the timer
+//         pauseTimerOnly();
+//       } else {
+//         // Resume if everything is ok
+//         resumeTimer();
+//       }
+//     }
+//   }, [
+//     status?.isChargingInitialized,
+//     isScootyParked,
+//     fodTriggered,
+//     misalignmentTriggered,
+//     emergencyStop,
+//     current
+//   ]);
+
+//   // Effect for handling charging time
+//   //yeh check karo guys
+//   useEffect(() => {
+//     let interval: NodeJS.Timeout;
+
+//     if (status?.isChargingInitialized && status?.duration?.endTime && !isPaused) {
+//       interval = setInterval(() => {
+//         const now = Date.now();
+//         const endTime = status.duration.endTime!;
+//         const difference = endTime - now;
+
+//         if (difference <= 0) {
+//           clearInterval(interval);
+//           resetChargingStatus();
+//           setTimeLeft({ hours: 0, minutes: 0, seconds: 0 });
+//           setPausedTimeLeft(null);
+//           setPauseTimestamp(null);
+//           router.push("/done");
+//           return;
+//         }
+
+//         const hours = Math.floor(difference / (1000 * 60 * 60));
+//         const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+//         const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+
+//         setTimeLeft({ hours, minutes, seconds });
+
+//         // Only calculate energy if all safety conditions are met
+//         if (isChargingInitialized && !fodTriggered && !misalignmentTriggered && !emergencyStop && current > 0) {
+//           const calculatedPower = Number((voltage * current).toFixed(2));
+//           const powerInKW = calculatedPower / 1000;
+//           const calculatedEnergy = powerInKW / 3600;
+//           setEnergy((prev) => Number((prev + calculatedEnergy).toFixed(6)));
+//         }
+//       }, 1000);
+//     }
+
+//     return () => {
+//       if (interval) {
+//         clearInterval(interval);
+//       }
+//     };
+//   }, [
+//     status?.isChargingInitialized,
+//     status?.duration?.endTime,
+//     resetChargingStatus,
+//     isPaused,
+//     isChargingInitialized,
+//     fodTriggered,
+//     misalignmentTriggered,
+//     emergencyStop,
+//     current,
+//     voltage,
+//   ]);
+
+//   // Effect for power calculations
+//   useEffect(() => {
+//     setPower(0);
+//     if (loading || error || !voltage || !current || SOC === undefined) {
+//       return;
+//     }
+
+//     // Only initialize charging if safety conditions are met
+//     if (current > 0.001 && !fodTriggered && !misalignmentTriggered && !emergencyStop) {
+//       updateChargingStatus(true);
+//       setIsChargingInitialized(true);
+//     } else {
+//       setPower(0);
+//     }
+
+//     try {
+//       const calculatedPower = Number((voltage * current).toFixed(2));
+//       setPower(calculatedPower);
+//     } catch (err) {
+//       console.error("Calculation error:", err);
+//       setPower(0);
+//     }
+//   }, [voltage, current, SOC, loading, error, fodTriggered, misalignmentTriggered, emergencyStop]);
+
+//   // Effect for handling safety conditions
+//   useEffect(() => {
+//     if (!isScootyParked || fodTriggered || misalignmentTriggered || emergencyStop) {
+//       pauseTimer();
+//       setIsChargingInitialized(false);
+//       setPower(0);
+//       updateChargingStatus(false);
+//     } else if (current <= 0) {
+//       pauseTimerOnly();
+//     } else {
+//       resumeTimer();
+//     }
+//   }, [isScootyParked, fodTriggered, misalignmentTriggered, emergencyStop, router, pauseTimer, resumeTimer]); //i just added router, pausetimer, resimetimer
+
+//   // Effect for resetting energy when safety conditions are triggered
+//   useEffect(() => {
+//     if (fodTriggered || misalignmentTriggered || emergencyStop) {
+//       setEnergy(0);
+//       set(ref(database, "chargingStatus"), false);
+//     }
+//   }, [fodTriggered, misalignmentTriggered, emergencyStop]);
+
+//   // Effect for handling unpark countdown
+//   useEffect(() => {
+//     let countdownInterval: NodeJS.Timeout;
+
+//     if (!isScootyParked) {
+//       if (!unparkStartTime) {
+//         setUnparkStartTime(Date.now());
+//       }
+
+//       countdownInterval = setInterval(() => {
+//         setParkCountdown((prev) => {
+//           if (prev <= 1) {
+//             resetChargingStatus();
+//             setTimeLeft({ hours: 0, minutes: 0, seconds: 0 });
+//             setPausedTimeLeft(null);
+//             setPauseTimestamp(null);
+//             setIsChargingInitialized(false);
+//             setEnergy(0);
+//             router.push("/");
+//             return 0;
+//           }
+//           return prev - 1;
+//         });
+//       }, 1000);
+//     } else {
+//       setUnparkStartTime(null);
+//       setParkCountdown(60);
+//     }
+
+//     return () => {
+//       if (countdownInterval) {
+//         clearInterval(countdownInterval);
+//       }
+//     };
+//   }, [isScootyParked, unparkStartTime, resetChargingStatus, router]);
+
+//   if (loading) {
+//     return <div className="w-[768px] h-[1024px] flex items-center justify-center bg-[#2A2D32]">Loading...</div>;
+//   }
+
+//   if (error) {
+//     return <div className="w-[768px] h-[1024px] flex items-center justify-center bg-[#2A2D32]">Error: {error}</div>;
+//   }
+// //jayam test
+//   const formatTime = (value: number): string => {
+//     return value.toString().padStart(2, "0");
+//   };
+
+//   return (
+
+//     <div
+//       className="w-[768px] h-[1024px] overflow-hidden bg-[#2A2D32] font-sans pt-7"
+//       style={{
+//         backgroundImage: "url(/main-bg.png)",
+//         backgroundSize: "cover",
+//         backgroundPosition: "center",
+//       }}
+//     >
+     
+//       <div className="flex justify-center items-center p-1 pt-20 w-full px-8">
+//         <motion.div
+//           className="text-left flex-col gap-2 mb-12 relative"
+//           initial={{ opacity: 0 }}
+//           animate={{ opacity: 1 }}
+//           transition={{ duration: 0.3 }}
+//         >
+//           <motion.div
+//             className="text-white/90 text-5xl font-medium tracking-wider relative group"
+//             initial={{ opacity: 0, x: -20 }}
+//             animate={{ opacity: 1, x: 0 }}
+//             transition={{ duration: 0.5, delay: 0.6 }}
+//           >
+//             <span
+//               className={`${poppins.className} relative ${
+//                 isScootyParked ? "" : "text-white"
+//               }`}
+//             >
+//               {isScootyParked ? (
+//                 isChargingInitialized ? (
+//                   current <= 0 ? (
+//                     "Charging Paused"
+//                   ) : (
+//                     "Charging"
+//                   )
+//                 ) : (
+//                   "Initializing Charging"
+//                 )
+//               ) : (
+//                 <div className="flex items-center gap-3">
+//                   <span>Park your vehicle</span>
+//                   <span className="text-red-400 font-mono bg-red-500/10 px-3 py-0.5 rounded-md border border-red-500/20">
+//                     {Math.floor(parkCountdown / 60)}:
+//                     {(parkCountdown % 60).toString().padStart(2, "0")}
+//                   </span>
+//                 </div>
+//               )}
+//             </span>
+//           </motion.div>
+//         </motion.div>
+//       </div>
+
+//       <ChargingPadWarning isFodThere={fodTriggered} />
+    
+//       {/* misalignment */}
+//       <MisalignmentDialog isMisaligned={misalignmentTriggered} />
+
+      
+      
+//       {/* /misalignmentSnapshot */}
+    
+
+//       <div className="flex flex-col items-center gap-6 mb-12 scale-150">
+//         <motion.div
+//           className="inline-flex items-center gap-2 px-4 py-2 bg-black/60 backdrop-blur-md rounded-full border border-white/5 shadow-lg shadow-cyan-500/10"
+//           initial={{ opacity: 0, y: 20 }}
+//           animate={{ opacity: 1, y: 0 }}
+//           transition={{ duration: 0.5, delay: 0.8 }}
+//         >
+//           <span className="text-white/90 text-sm font-medium">
+//             {SOC + "% "}Charged
+//           </span>
+//           <svg
+//             width="14"
+//             height="14"
+//             viewBox="0 0 24 24"
+//             fill="none"
+//             xmlns="http://www.w3.org/2000/svg"
+//             className="text-cyan-400"
+//           >
+//             <path
+//               d="M13 2L4.09347 12.6879C3.74466 13.1064 3.57026 13.3157 3.56759 13.4925C3.56526 13.6461 3.63373 13.7923 3.75326 13.8889C3.89075 14 4.16318 14 4.70803 14H12L11 22L19.9065 11.3121C20.2553 10.8936 20.4297 10.6843 20.4324 10.5075C20.4347 10.3539 20.3663 10.2077 20.2467 10.1111C20.1092 10 19.8368 10 19.292 10H12L13 2Z"
+//               stroke="currentColor"
+//               strokeWidth="2"
+//               strokeLinecap="round"
+//               strokeLinejoin="round"
+//             />
+//           </svg>
+//         </motion.div>
+//       </div>
+
+//       <WaveCharging isChargeInit={isChargingInitialized} percentage={SOC} />
+
+//       <div className="flex w-full justify-center items-center mb-4">
+//         <div className="flex-col justify-center items-center gap-36">
+//           <motion.div
+//             initial={{ x: 768 }}
+//             animate={{ x: 0 }}
+//             key={isScootyParked ? "parked" : "not-parked"}
+//             transition={{
+//               duration: 5,
+//               type: "spring",
+//               stiffness: 100,
+//               damping: 100,
+//               repeat: isScootyParked ? 0 : Infinity,
+//             }}
+//           >
+          
+//               <Image
+//                 src="/charge-bike.png"
+//                 alt="Charger pad"
+//                 width={500}
+//                 height={300}
+//                 className="drop-shadow-[0_0_15px_rgba(6,182,212,0.15)]"
+//               />
+//           </motion.div>
+           
+//           <div className="flex w-full items-center justify-center">
+//             <Image
+//               src="/charge-pad.png"
+//               alt="Charger pad"
+//               width={200}
+//               height={100}
+//               className="drop-shadow-[0_0_15px_rgba(6,182,212,0.15)]"
+//             />
+//           </div>
+//         </div>
+//       </div>
+
+//       <div className="w-full px-12 mt-7">
+//         <div className="grid grid-cols-2 gap-6">
+//           <motion.div
+//             className="group shadow-[0_0_0_1px_rgba(255,255,255,0.1)_inset] px-8 py-4 bg-black/20 backdrop-blur-sm rounded-lg text-gray-400 text-xl font-bold w-full text-center hover:shadow-[0_0_0_1px_rgba(6,182,212,0.2)_inset] transition-all duration-300 hover:bg-black/30"
+//             initial={{ opacity: 0, y: 20 }}
+//             animate={{ opacity: 1, y: 0 }}
+//             transition={{ duration: 0.5, delay: 1.0 }}
+//           >
+//             <span className="text-nowrap">Energy: </span>
+//             <span className="group-hover:text-cyan-400/90 transition-colors duration-300 text-nowrap">
+//               {energy.toFixed(5)} kWh
+//             </span>
+//           </motion.div>
+
+//           <motion.div
+//             className="group shadow-[0_0_0_1px_rgba(255,255,255,0.1)_inset] px-8 py-4 bg-black/20 backdrop-blur-sm rounded-lg text-gray-400 text-xl font-bold w-full text-center hover:shadow-[0_0_0_1px_rgba(6,182,212,0.2)_inset] transition-all duration-300 hover:bg-black/30"
+//             initial={{ opacity: 0, y: 20 }}
+//             animate={{ opacity: 1, y: 0 }}
+//             transition={{ duration: 0.5, delay: 1.2 }}
+//           >
+            
+            
+//             Time Remaining:{" "}
+//             <span className="group-hover:text-cyan-400/90 transition-colors duration-300">
+//               {formatTime(timeLeft.hours)}:{formatTime(timeLeft.minutes)}:
+//               {formatTime(timeLeft.seconds)}
+//             </span>
+//           </motion.div>
+
+//           <motion.div
+//             className="group shadow-[0_0_0_1px_rgba(255,255,255,0.1)_inset] px-8 py-4 bg-black/20 backdrop-blur-sm rounded-lg text-gray-400 text-xl font-bold w-full text-center hover:shadow-[0_0_0_1px_rgba(6,182,212,0.2)_inset] transition-all duration-300 hover:bg-black/30"
+//             initial={{ opacity: 0, y: 20 }}
+//             animate={{ opacity: 1, y: 0 }}
+//             transition={{ duration: 0.5, delay: 1.4 }}
+//           >
+//             Charging Current:{" "}
+//             <span className="group-hover:text-cyan-400/90 transition-colors duration-300">
+//               {current.toFixed(2)} A
+//             </span>
+//           </motion.div>
+
+//           <motion.div
+//             className="group shadow-[0_0_0_1px_rgba(255,255,255,0.1)_inset] px-8 py-4 bg-black/20 backdrop-blur-sm rounded-lg text-gray-400 text-xl font-bold w-full text-center hover:shadow-[0_0_0_1px_rgba(6,182,212,0.2)_inset] transition-all duration-300 hover:bg-black/30"
+//             initial={{ opacity: 0, y: 20 }}
+//             animate={{ opacity: 1, y: 0 }}
+//             transition={{ duration: 0.5, delay: 1.6 }}
+//           >
+//             Power:{" "}
+//             <span className="group-hover:text-cyan-400/90 transition-colors duration-300">
+//               {power} W
+//             </span>
+//           </motion.div>
+//         </div>
+//       </div>
+//       {emergencyStop && <EmergencyStop isEmergencyStop={emergencyStop} />}
+//     </div>
+//   );
+  
+// };
+
+// export default Charge;
+
+
+
+// import { useState, useEffect, useRef } from "react";
+// import { ref, set, onValue, off } from "firebase/database";
+// import { database } from "@/config/firebase";
+// import { toast } from "sonner"; //last
+// import { useRouter } from "next/navigation"; //last
+// import { useBMSData } from "./useBMSData" //last
+
+// interface ChargingStatus {
+//   isChargingInitialized: boolean;
+//   duration: {
+//     hours: number;
+//     minutes: number;
+//     endTime?: number | null;
+//   };
+//   targetEnergy?: number; //last
+// }
+
+// export const useChargingStatus = () => {
+//   const [fodTriggered, setFodTriggered] = useState(false);
+//   const [misalignmentTriggered, setMisalignmentTriggered] = useState(false);
+//   const [emergencyStop, setEmergencyStop] = useState(false);
+//   //last
+//   const [energy, setEnergy] = useState(0);
+//   const router = useRouter();
+//   const bmsData = useBMSData();
+
+// //last
+
+//   const lastValidChargingState = useRef<ChargingStatus | null>(null);
+//   const [status, setStatus] = useState<ChargingStatus>({
+//     isChargingInitialized: false,
+//     duration: {
+//       hours: 0,
+//       minutes: 0,
+//       // endTime: null, // done for timer
+//     },
+//   });
+
+//   // Listen to charging status
+//   useEffect(() => {
+//     const chargingRef = ref(database, "charging_status");
+//     const onValueChange = (snapshot: any) => {
+//       if (snapshot.exists())
+//       {
+
+//         //we need to make changes for timer
+//         const data: ChargingStatus = snapshot.val();
+        
+//         // If no safety conditions are triggered
+//         if (!fodTriggered && !misalignmentTriggered && !emergencyStop)
+//         {
+//           setStatus(data);
+//           if (data.isChargingInitialized) {
+//             lastValidChargingState.current = data;
+//           }
+//         }
+//         else
+//         {
+//           // Store the current state if charging is active
+//           if (data.isChargingInitialized) {
+//             lastValidChargingState.current = data;
+//           }
+//           // Force charging to false during safety conditions
+//           setStatus(prev => ({
+//             ...prev,
+//             isChargingInitialized: false
+//           }));
+//         }
+//       }
+//     };
+
+//     onValue(chargingRef, onValueChange);
+//     return () => off(chargingRef, "value", onValueChange);
+//   }, [fodTriggered, misalignmentTriggered, emergencyStop]);
+
+//   // Handle safety conditions changes
+//   useEffect(() => {
+//     const safetyCleared = !fodTriggered && !misalignmentTriggered && !emergencyStop;
+    
+//     if (safetyCleared && lastValidChargingState.current?.isChargingInitialized) {
+//       // Restore the last valid charging state
+//       updateChargingStatus(true, lastValidChargingState.current.duration);
+//     } else if (!safetyCleared) {
+//       // Force charging off when safety conditions are triggered
+//       updateChargingStatus(false);
+//     }
+//   }, [fodTriggered, misalignmentTriggered, emergencyStop]);
+
+//   // Listen to FOD status
+//   useEffect(() => {
+//     const fodRef = ref(database, "Is_FOD_Present");
+//     const onFODChange = (snapshot: any) => {
+//       if (snapshot.exists()) {
+//         const newFodState = snapshot.val();
+//         setFodTriggered(newFodState);
+//       }
+//     };
+
+//     onValue(fodRef, onFODChange);
+//     return () => off(fodRef, "value", onFODChange);
+//   }, []);
+
+//   // Listen to misalignment status
+//   useEffect(() => {
+//     const misalignmentRef = ref(database, "isMisaligned");
+//     const onMisalignmentChange = (snapshot: any) => {
+//       if (snapshot.exists()) {
+//         const newMisalignmentState = snapshot.val();
+//         setMisalignmentTriggered(newMisalignmentState);
+//       }
+//     };
+
+//     onValue(misalignmentRef, onMisalignmentChange);
+//     return () => off(misalignmentRef, "value", onMisalignmentChange);
+//   }, []);
+
+//   // Listen to emergency stop status
+//   useEffect(() => {
+//     const emergencyStopRef = ref(database, "emergencyStop");
+//     const onEmergencyStopChange = (snapshot: any) => {
+//       if (snapshot.exists()) {
+//         const newEmergencyState = snapshot.val();
+//         setEmergencyStop(newEmergencyState);
+//       }
+//     };
+
+//     onValue(emergencyStopRef, onEmergencyStopChange);
+//     return () => off(emergencyStopRef, "value", onEmergencyStopChange);
+//   }, []);
+
+//   const updateChargingStatus = async (
+//     isCharging: boolean,
+//     duration?: { hours: number; minutes: number; endTime?: number } //| null }
+//   ) => {
+//     try {
+//       // Don't allow charging to be enabled if safety conditions aren't met
+//       if (isCharging && (fodTriggered || misalignmentTriggered || emergencyStop)) {
+//         return false;
+//       }
+
+//       const chargingRef = ref(database, "charging_status");
+//       const now = Date.now(); //for timer
+//       const updatedStatus: ChargingStatus = {
+//         isChargingInitialized: isCharging,
+//         duration: duration
+//           ? {
+//               hours: duration?.hours || 0,  //changed
+//               minutes: duration.minutes || 0,
+//             endTime: duration.endTime,
+//               // || null,4
+//             }
+//           : status.duration,
+//       };
+
+//       await set(chargingRef, updatedStatus);
+//       return true;
+//     } catch (error) {
+//       console.error("Error updating charging status:", error);
+//       return false;
+//     }
+//   };
+
+//   const resetChargingStatus = async () => {
+//     try {
+//       lastValidChargingState.current = null;
+//       const chargingRef = ref(database, "charging_status");
+//       await set(chargingRef, {
+//         isChargingInitialized: false,
+//         duration: {
+//           hours: 0,
+//           minutes: 0,
+//           endTime: null,
+//         },
+//       });
+//       return true;
+//     } catch (error) {
+//       console.error("Error resetting charging status:", error);
+//       return false;
+//     }
+//   };
+
+//   return {
+//     status,
+//     updateChargingStatus,
+//     fodTriggered,
+//     misalignmentTriggered,
+//     emergencyStop,
+//     resetChargingStatus,
+//   };
+// };
+
+// import { useState, useEffect, useRef } from "react";
+// import { ref, set, onValue, off } from "firebase/database";
+// import { database } from "@/config/firebase";
+// import { toast } from "sonner"; //last
+// import { useRouter } from "next/navigation"; //last
+// import { useBMSData } from "./useBMSData" //last
+
+// interface ChargingStatus {
+//   isChargingInitialized: boolean;
+//   duration: {
+//     hours: number;
+//     minutes: number;
+//     endTime?: number;
+//   };
+//   targetEnergy?: number; //last
+// }
+
+// export const useChargingStatus = () => {
+//   const [fodTriggered, setFodTriggered] = useState(false);
+//   const [misalignmentTriggered, setMisalignmentTriggered] = useState(false);
+//   const [emergencyStop, setEmergencyStop] = useState(false);
+//   //last
+//   const [energy, setEnergy] = useState(0);
+//   const router = useRouter();
+//   const bmsData = useBMSData();
+
+// //last
+
+//   const lastValidChargingState = useRef<ChargingStatus | null>(null);
+//   const [status, setStatus] = useState<ChargingStatus>({
+//     isChargingInitialized: false,
+//     duration: {
+//       hours: 0,
+//       minutes: 0,
+//       // endTime: null, // done for timer
+//     },
+//   });
+
+//   // Listen to charging status
+//   useEffect(() => {
+//     const chargingRef = ref(database, "charging_status");
+//     const onValueChange = (snapshot: any) => {
+//       if (snapshot.exists())
+//       {
+
+//         //we need to make changes for timer
+//         const data: ChargingStatus = snapshot.val();
+        
+//         // If no safety conditions are triggered
+//         if (!fodTriggered && !misalignmentTriggered && !emergencyStop)
+//         {
+//           setStatus(data);
+//           if (data.isChargingInitialized) {
+//             lastValidChargingState.current = data;
+//           }
+//         }
+//         else
+//         {
+//           // Store the current state if charging is active
+//           if (data.isChargingInitialized) {
+//             lastValidChargingState.current = data;
+//           }
+//           // Force charging to false during safety conditions
+//           setStatus(prev => ({
+//             ...prev,
+//             isChargingInitialized: false
+//           }));
+//         }
+//       }
+//     };
+
+//     onValue(chargingRef, onValueChange);
+//     return () => off(chargingRef, "value", onValueChange);
+//   }, [fodTriggered, misalignmentTriggered, emergencyStop]);
+
+//   // Handle safety conditions changes
+//   useEffect(() => {
+//     const safetyCleared = !fodTriggered && !misalignmentTriggered && !emergencyStop;
+    
+//     if (safetyCleared && lastValidChargingState.current?.isChargingInitialized) {
+//       // Restore the last valid charging state
+//       updateChargingStatus(true, lastValidChargingState.current.duration);
+//     } else if (!safetyCleared) {
+//       // Force charging off when safety conditions are triggered
+//       updateChargingStatus(false);
+//     }
+//   }, [fodTriggered, misalignmentTriggered, emergencyStop]);
+
+//   // Listen to FOD status
+//   useEffect(() => {
+//     const fodRef = ref(database, "Is_FOD_Present");
+//     const onFODChange = (snapshot: any) => {
+//       if (snapshot.exists()) {
+//         const newFodState = snapshot.val();
+//         setFodTriggered(newFodState);
+//       }
+//     };
+
+//     onValue(fodRef, onFODChange);
+//     return () => off(fodRef, "value", onFODChange);
+//   }, []);
+
+//   // Listen to misalignment status
+//   useEffect(() => {
+//     const misalignmentRef = ref(database, "isMisaligned");
+//     const onMisalignmentChange = (snapshot: any) => {
+//       if (snapshot.exists()) {
+//         const newMisalignmentState = snapshot.val();
+//         setMisalignmentTriggered(newMisalignmentState);
+//       }
+//     };
+
+//     onValue(misalignmentRef, onMisalignmentChange);
+//     return () => off(misalignmentRef, "value", onMisalignmentChange);
+//   }, []);
+
+//   // Listen to emergency stop status
+//   useEffect(() => {
+//     const emergencyStopRef = ref(database, "emergencyStop");
+//     const onEmergencyStopChange = (snapshot: any) => {
+//       if (snapshot.exists()) {
+//         const newEmergencyState = snapshot.val();
+//         setEmergencyStop(newEmergencyState);
+//       }
+//     };
+
+//     onValue(emergencyStopRef, onEmergencyStopChange);
+//     return () => off(emergencyStopRef, "value", onEmergencyStopChange);
+//   }, []);
+
+//   const updateChargingStatus = async (
+//     isCharging: boolean,
+//     duration?: { hours: number; minutes: number; endTime?: number } //| null }
+//   ) => {
+//     try {
+//       // Don't allow charging to be enabled if safety conditions aren't met
+//       if (isCharging && (fodTriggered || misalignmentTriggered || emergencyStop)) {
+//         return false;
+//       }
+
+//       const chargingRef = ref(database, "charging_status");
+//       const now = Date.now(); //for timer
+//       const updatedStatus: ChargingStatus = {
+//         isChargingInitialized: isCharging,
+//         duration: duration
+//           ? {
+//               hours: duration?.hours || 0,  //changed
+//               minutes: duration?.minutes || 0,
+//             endTime: duration?.endTime ||
+//             (isCharging && duration
+//               ? now + (duration.hours * 3600000 + duration.minutes * 60000)
+//               : undefined),
+//               // || null,4
+//             }
+//           : status.duration,
+//       };
+
+//       await set(chargingRef, updatedStatus);
+//       return true;
+//     } catch (error) {
+//       console.error("Error updating charging status:", error);
+//       return false;
+//     }
+//   };
+
+//   const resetChargingStatus = async () => {
+//     try {
+//       lastValidChargingState.current = null;
+//       const chargingRef = ref(database, "charging_status");
+//       await set(chargingRef, {
+//         isChargingInitialized: false,
+//         duration: {
+//           hours: 0,
+//           minutes: 0,
+//           endTime: null,
+//         },
+//       });
+//       return true;
+//     } catch (error) {
+//       console.error("Error resetting charging status:", error);
+//       return false;
+//     }
+//   };
+
+//   return {
+//     status,
+//     updateChargingStatus,
+//     fodTriggered,
+//     misalignmentTriggered,
+//     emergencyStop,
+//     resetChargingStatus,
+//   };
+// };
+// clause
+// import { useState, useEffect, useRef } from "react";
+// import { ref, set, onValue, off } from "firebase/database";
+// import { database } from "@/config/firebase";
+
+// interface ChargingStatus {
+//   isChargingInitialized: boolean;
+//   duration: {
+//     hours: number;
+//     minutes: number;
+//     endTime?: number;
+//   };
+// }
+
+// export const useChargingStatus = () => {
+//   // Safety and detection states
+//   const [fodTriggered, setFodTriggered] = useState(false);
+//   const [misalignmentTriggered, setMisalignmentTriggered] = useState(false);
+//   const [emergencyStop, setEmergencyStop] = useState(false);
+//   const [isReceiverCoilDetected, setIsReceiverCoilDetected] = useState(false);
+  
+//   // Energy monitoring states
+//   const [targetEnergy, setTargetEnergy] = useState(0);
+//   const [instantaneousEnergy, setInstantaneousEnergy] = useState(0);
+
+//   const lastValidChargingState = useRef<ChargingStatus | null>(null);
+//   const [status, setStatus] = useState<ChargingStatus>({
+//     isChargingInitialized: false,
+//     duration: {
+//       hours: 0,
+//       minutes: 0,
+//     },
+//   });
+
+//   // Listen to charging status
+//   useEffect(() => {
+//     const chargingRef = ref(database, "charging_status");
+//     const onValueChange = (snapshot: any) => {
+//       if (snapshot.exists()) {
+//         const data: ChargingStatus = snapshot.val();
+//         const safetyConditionsMet = !fodTriggered &&
+//                                   !misalignmentTriggered &&
+//                                   !emergencyStop &&
+//                                   isReceiverCoilDetected;
+//         if (data.duration?.endTime && data.isChargingInitialized) {
+//           const now = Date.now();
+//           if (now >= data.duration.endTime) {
+//           resetChargingStatus();
+//          }
+//         }
+        
+//         if (safetyConditionsMet) {
+//           setStatus(data);
+//           if (data.isChargingInitialized) {
+//             lastValidChargingState.current = data;
+//           }
+//         } else {
+//           if (data.isChargingInitialized) {
+//             lastValidChargingState.current = data;
+//           }
+//           setStatus((prev) => ({
+//             ...prev,
+//             isChargingInitialized: false,
+//           }));
+//         }
+//       }
+//     };
+
+//     onValue(chargingRef, onValueChange);
+//     return () => off(chargingRef, "value", onValueChange);
+//   }, [fodTriggered, misalignmentTriggered, emergencyStop, isReceiverCoilDetected]);
+
+
+//   // above code :  Listens to the charging_status field in the database to handle changes to the charging state.
+
+//   // Handle safety condition changes
+//   useEffect(() => {
+//     const safetyConditionsMet = !fodTriggered &&
+//                                !misalignmentTriggered &&
+//                                !emergencyStop &&
+//                                isReceiverCoilDetected;
+
+//     if (safetyConditionsMet && lastValidChargingState.current?.isChargingInitialized) {
+//       updateChargingStatus(true, lastValidChargingState.current.duration);
+//     } else if (!safetyConditionsMet) {
+//       updateChargingStatus(false);
+//     }
+//   }, [fodTriggered, misalignmentTriggered, emergencyStop, isReceiverCoilDetected]);
+
+//   // Monitor target and instantaneous energy
+//   // above code : Purpose: Monitors safety conditions to determine whether charging should continue.
+
+
+//   // Monitoring Energy Levels below
+//   useEffect(() => {
+//     const targetEnergyRef = ref(database, "targetEnergy");
+//     const instantaneousEnergyRef = ref(database, "instantaneousEnergy");
+    
+//     const onTargetEnergyChange = (snapshot: any) => {
+//       if (snapshot.exists()) {
+//         setTargetEnergy(snapshot.val());
+//       }
+//     };
+    
+//     const onInstantaneousEnergyChange = (snapshot: any) => {
+//       if (snapshot.exists()) {
+//         const newEnergy = snapshot.val();
+//         setInstantaneousEnergy(newEnergy);
+        
+//         // If target energy is reached, stop charging
+//         if (newEnergy >= targetEnergy && targetEnergy > 0) {
+//           resetChargingStatus();
+//           // Navigation logic should be handled in the component using this hook
+//           // Example: router.push('/done');
+//         }
+//       }
+//     };
+
+//     onValue(targetEnergyRef, onTargetEnergyChange);
+//     onValue(instantaneousEnergyRef, onInstantaneousEnergyChange);
+    
+//     return () => {
+//       off(targetEnergyRef, "value", onTargetEnergyChange);
+//       off(instantaneousEnergyRef, "value", onInstantaneousEnergyChange);
+//     };
+//   }, [targetEnergy]);
+
+//   // above code : Monitors targetEnergy and instantaneousEnergy to stop charging once the target energy is reached.
+
+//   // Stop charging when the timer expires  Handling Timer Expiry
+//   //yaha
+
+//   useEffect(() => {
+//     if (status.isChargingInitialized && status.duration?.endTime) {
+//       const now = Date.now();
+//       const remainingTime = status.duration.endTime - now;
+
+//       if (remainingTime <= 0) {
+//         resetChargingStatus();
+//       } else {
+//         const timer = setTimeout(() => resetChargingStatus(), remainingTime);
+//         return () => clearTimeout(timer);
+//       }
+//     }
+//   }, [status.isChargingInitialized, status.duration?.endTime]);
+
+//   // Listen to FOD status
+//   useEffect(() => {
+//     const fodRef = ref(database, "Is_FOD_Present");
+//     const onFODChange = (snapshot: any) => {
+//       if (snapshot.exists()) {
+//         setFodTriggered(snapshot.val());
+//       }
+//     };
+
+//     onValue(fodRef, onFODChange);
+//     return () => off(fodRef, "value", onFODChange);
+//   }, []);
+
+//   // Listen to misalignment status
+//   useEffect(() => {
+//     const misalignmentRef = ref(database, "isMisaligned");
+//     const onMisalignmentChange = (snapshot: any) => {
+//       if (snapshot.exists()) {
+//         setMisalignmentTriggered(snapshot.val());
+//       }
+//     };
+
+//     onValue(misalignmentRef, onMisalignmentChange);
+//     return () => off(misalignmentRef, "value", onMisalignmentChange);
+//   }, []);
+
+//   // Listen to emergency stop status
+//   useEffect(() => {
+//     const emergencyStopRef = ref(database, "emergencyStop");
+//     const onEmergencyStopChange = (snapshot: any) => {
+//       if (snapshot.exists()) {
+//         setEmergencyStop(snapshot.val());
+//       }
+//     };
+
+//     onValue(emergencyStopRef, onEmergencyStopChange);
+//     return () => off(emergencyStopRef, "value", onEmergencyStopChange);
+//   }, []);
+
+//   // Listen to receiver coil detection
+//   useEffect(() => {
+//     const receiverCoilRef = ref(database, "isReceiverCoilDetected");
+//     const onReceiverCoilChange = (snapshot: any) => {
+//       if (snapshot.exists()) {
+//         setIsReceiverCoilDetected(snapshot.val());
+//       }
+//     };
+
+//     onValue(receiverCoilRef, onReceiverCoilChange);
+//     return () => off(receiverCoilRef, "value", onReceiverCoilChange);
+//   }, []);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//   /////////////////////////////////////////////////////////////////////////////
+//   const updateChargingStatus = async (
+//     isCharging: boolean,
+//     duration?: { hours: number; minutes: number; endTime?: number }
+//   ) => {
+//     try {
+//       const safetyConditionsMet = !fodTriggered &&
+//                                  !misalignmentTriggered &&
+//                                  !emergencyStop &&
+//                                  isReceiverCoilDetected;
+
+//       if (isCharging && !safetyConditionsMet) {
+//         return false;
+//       }
+
+//       const chargingRef = ref(database, "charging_status");
+//       const now = Date.now();
+
+//       const updatedStatus: ChargingStatus = {
+//         isChargingInitialized: isCharging,
+//         duration: duration
+//           ? {
+//               hours: duration.hours || 0,
+//               minutes: duration.minutes || 0,
+//               endTime:
+//                 duration.endTime ||
+//                 (isCharging && duration
+//                   ? now + (duration.hours * 3600000 + duration.minutes * 60000)
+//                   : undefined),
+//             }
+//           : status.duration,
+//       };
+
+//       await set(chargingRef, updatedStatus);
+//       return true;
+//     } catch (error) {
+//       console.error("Error updating charging status:", error);
+//       return false;
+//     }
+//   };
+
+//   const resetChargingStatus = async () => {
+//     try {
+//       lastValidChargingState.current = null;
+//       const chargingRef = ref(database, "charging_status");
+//       await set(chargingRef, {
+//         isChargingInitialized: false,
+//         duration: {
+//           hours: 0,
+//           minutes: 0,
+//           endTime: null,
+//         },
+//       });
+//       return true;
+//     } catch (error) {
+//       console.error("Error resetting charging status:", error);
+//       return false;
+//     }
+//   };
+
+//   return {
+//     status,
+//     updateChargingStatus,
+//     fodTriggered,
+//     misalignmentTriggered,
+//     emergencyStop,
+//     isReceiverCoilDetected,
+//     targetEnergy,
+//     instantaneousEnergy,
+//     resetChargingStatus,
+//   };
+// };
+
+// "use client";
+// import React, { useEffect, useState } from "react";
+
+// import { database } from "@/config/firebase";
+// import { ref, onValue } from "firebase/database";
+// import { useRouter } from "next/navigation";
+
+// const Page = () => {
+//   const router = useRouter();
+//   const [isScootyParked, setIsScootyParked] = useState(true);
+//   useEffect(() => {
+//     try {
+//       const coilRef = ref(database, "IsReceiverCoilDetected");
+//       const fodRef = ref(database, "Is_FOD_Present");
+
+//       let unsubscribeFod: (() => void) | undefined;
+
+//       const unsubscribeCoil = onValue(coilRef, (coilSnapshot) => {
+//         if (unsubscribeFod) {
+//           unsubscribeFod();
+//         }
+
+//         unsubscribeFod = onValue(fodRef, (fodSnapshot) => {
+//           const isCoilDetected = coilSnapshot.val();
+//           const isFodPresent = fodSnapshot.val();
+//           setIsScootyParked(isCoilDetected);
+//           if (isCoilDetected === false) {
+//             router.push("/");
+//           }
+//         });
+//       });
+
+//       return () => {
+//         unsubscribeCoil();
+//         if (unsubscribeFod) {
+//           unsubscribeFod();
+//         }
+//       };
+//     } catch (error) {
+//       console.error("Error setting up Firebase listeners:", error);
+//     }
+//   }, []);
+
+//   return (
+//     <div
+//       className="w-[768px] h-[1024px] overflow-hidden bg-[#2A2D32] font-sans pt-7"
+//       style={{
+//         backgroundImage: "url(/main-bg.png)",
+//         backgroundSize: "cover",
+//         backgroundPosition: "center",
+//       }}
+//     >
+//       <div className="flex flex-col justify-center items-center p-1 pt-24 w-full px-8 gap-6">
+//         <div className="flex justify-center items-center w-32 h-32 bg-green-500 rounded-full drop-shadow-[0_0_15px_rgba(34,197,94,0.7)]">
+//           <svg
+//             xmlns="http://www.w3.org/2000/svg"
+//             className="w-16 h-16 text-white"
+//             fill="none"
+//             viewBox="0 0 24 24"
+//             stroke="currentColor"
+//             strokeWidth={2}
+//           >
+//             <path
+//               strokeLinecap="round"
+//               strokeLinejoin="round"
+//               d="M5 13l4 4L19 7"
+//             />
+//           </svg>
+//         </div>
+//         <div className="text-green-500 text-5xl font-bold tracking-wider drop-shadow-[0_0_10px_rgba(34,197,94,0.5)]">
+//           THANKS FOR CHARGING
+//         </div>
+//         <div className="text-green-400/80 text-xl mt-2">
+//           Your vehicle is ready to go!
+//         </div>
+//         <div className="pt-12">
+//           <Image
+//             src="/charge-bike.png"
+//             alt="Charger pad"
+//             width={700}
+//             height={500}
+//             className="drop-shadow-[0_0_15px_rgba(6,182,212,0.15)]"
+//           />
+//         </div>
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default Page;
+// "use client";
+// import React, { useEffect, useState } from "react";
+// import { database } from "@/config/firebase";
+// import { ref, onValue } from "firebase/database";
+// import { useRouter } from "next/navigation";
+
+// const Page = () => {
+//   const router = useRouter();
+//   const [isScootyParked, setIsScootyParked] = useState(true);
+
+//   useEffect(() => {
+//     try {
+//       const coilRef = ref(database, "IsReceiverCoilDetected");
+//       const fodRef = ref(database, "Is_FOD_Present");
+
+//       let unsubscribeFod: (() => void) | undefined;
+
+//       const unsubscribeCoil = onValue(coilRef, (coilSnapshot) => {
+//         if (unsubscribeFod) {
+//           unsubscribeFod();
+//         }
+
+//         unsubscribeFod = onValue(fodRef, (fodSnapshot) => {
+//           const isCoilDetected = coilSnapshot.val();
+//           const isFodPresent = fodSnapshot.val();
+//           setIsScootyParked(isCoilDetected);
+//           if (isCoilDetected === false) {
+//             router.push("/");
+//           }
+//         });
+//       });
+
+//       return () => {
+//         unsubscribeCoil();
+//         if (unsubscribeFod) {
+//           unsubscribeFod();
+//         }
+//       };
+//     } catch (error) {
+//       console.error("Error setting up Firebase listeners:", error);
+//     }
+//   }, []);
+
+//   return (
+//     <div
+//       className="w-[768px] h-[1024px] overflow-hidden bg-[#2A2D32] font-sans pt-7"
+//       style={{
+//         backgroundImage: "url(/main-bg.png)",
+//         backgroundSize: "cover",
+//         backgroundPosition: "center",
+//       }}
+//     >
+//       <div className="flex flex-col justify-center items-center p-1 pt-24 w-full px-8 gap-6">
+//         <div className="flex justify-center items-center w-32 h-32 bg-green-500 rounded-full drop-shadow-[0_0_15px_rgba(34,197,94,0.7)]">
+//           <svg
+//             xmlns="http://www.w3.org/2000/svg"
+//             className="w-16 h-16 text-white"
+//             fill="none"
+//             viewBox="0 0 24 24"
+//             stroke="currentColor"
+//             strokeWidth={2}
+//           >
+//             <path
+//               strokeLinecap="round"
+//               strokeLinejoin="round"
+//               d="M5 13l4 4L19 7"
+//             />
+//           </svg>
+//         </div>
+//         <div className="text-green-500 text-5xl font-bold tracking-wider drop-shadow-[0_0_10px_rgba(34,197,94,0.5)]">
+//           THANKS FOR CHARGING
+//         </div>
+//         <div className="text-green-400/80 text-xl mt-2">
+//           Your vehicle is ready to go!
+//         </div>
+//         <div className="pt-12">
+//           {/* Updated Home Button */}
+//           <button
+//             onClick={() => router.push("/")}
+//             className="px-6 py-3 bg-gradient-to-r from-red-500 to-green-500 text-white font-semibold text-lg rounded-xl shadow-lg transform transition-all hover:scale-105 hover:from-red-400 hover:to-green-400 hover:shadow-2xl"
+//           >
+//             Go Home
+//           </button>
+//         </div>
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default Page;
+// "use client";
+
+// import { useState, useEffect } from "react";
+// import { useRouter } from "next/navigation";
+// import { ChevronLeft, ChevronRight, Info, IndianRupee } from "lucide-react";
+// import { Button } from "@/components/ui/button";
+// import { Card, CardContent } from "@/components/ui/card";
+// import { toast } from "sonner";
+// import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+// import { useChargingStatus } from "@/hooks/useChargingStatus";
+// import { useBMSData } from "@/hooks/useBMSData";
+// import { ref, update } from "firebase/database";
+// import { database } from "@/config/firebase";
+// import ChargingPadWarning from "@/components/FodDialog";
+
+// export default function Page() {
+//   const [amount, setAmount] = useState(0);
+//   const [isLoading, setIsLoading] = useState(false);
+//   const [isChargingInitialized, setIsChargingInitialized] = useState(false);
+//   const [energy, setEnergy] = useState(0); // Accumulated energy in kWh
+//   const [targetEnergy, setTargetEnergy] = useState(0); // Target energy in kWh
+//   const router = useRouter();
+//   const { status, updateChargingStatus, resetChargingStatus } = useChargingStatus();
+//   const bmsData = useBMSData();
+
+//   const isFodThere = bmsData?.isFodThere ?? false;
+//   const isScootyParked = bmsData?.isReceiverCoilDetected ?? true;
+//   const isMisaligned = bmsData?.isMisaligned ?? false;
+
+//   const formatNumber = (num: number | string | null | undefined): string => {
+//     const validNumber = isNaN(Number(num)) ? 0 : Number(num); // Fallback to 0 if num is invalid
+//     return `₹${validNumber.toFixed(2)}`;
+//   };
+//   const incrementValue = () => setAmount((prev) => prev + 1);
+//   const decrementValue = () => setAmount((prev) => (prev > 0 ? prev - 1 : 0));
+//   // const handleQuickSelect = (value) => setAmount(value);
+//   const handleQuickSelect = (value: number): void => {
+//     if (!isNaN(value) && value >= 0) {
+//       setAmount(value);
+//     } else {
+//       console.error("Invalid value for quick select:", value);
+//     }
+//   };
+  
+
+//   const handleSelect = async () => {
+//     if (amount === 0) {
+//       toast.error("Please select a valid amount");
+//       return;
+//     }
+  
+//     setIsLoading(true);
+//     try {
+//       const amountRef = ref(database, "Payment/latest");
+//       await update(amountRef, { selectedAmount: amount });
+  
+//       const calculatedTargetEnergy = amount / 30; // Assuming energy is derived from money
+//       const chargingSuccess = await updateChargingStatus(true, {
+//         hours: 0,
+//         minutes: 0,
+//         endTime: null, // Set the endTime if needed
+//       });
+  
+//       if (chargingSuccess) {
+//         const targetEnergyRef = ref(database, "charging_status");
+//         console.log("Updating Firebase Target Energy:", calculatedTargetEnergy);
+  
+//         await update(targetEnergyRef, { targetEnergy: calculatedTargetEnergy })
+//           .then(() => {
+//             console.log("Target Energy updated successfully in Firebase.");
+//           })
+//           .catch((error) => {
+//             console.error("Error updating target energy in Firebase:", error);
+//             throw error;
+//           });
+  
+//         setTargetEnergy(calculatedTargetEnergy);
+//         setIsChargingInitialized(true);
+//         toast.success(`Charging initialized for amount: ${formatNumber(amount)}`);
+//         router.push("/charge");
+//       } else {
+//         toast.error("Failed to initialize charging");
+//       }
+//     } catch (error) {
+//       console.error("Error initializing charging:", error);
+//       toast.error("Failed to initialize charging");
+//     } finally {
+//       setIsLoading(false);
+//     }
+//   };
+  
+//   useEffect(() => {
+//     if (isChargingInitialized) {
+//       const interval = setInterval(() => {
+//         const voltage = bmsData?.voltage ?? 0;
+//         const current = bmsData?.current ?? 0;
+
+//         if (voltage > 0 && current > 0) {
+//           const calculatedPower = voltage * current; // Power in watts
+//           const powerInKW = calculatedPower / 1000; // Power in kW
+//           const energyIncrement = powerInKW / 3600; // Energy in kWh per second
+
+//           setEnergy((prev) => {
+//             const newEnergy = prev + energyIncrement;
+
+//             if (newEnergy >= targetEnergy) {
+//               setIsChargingInitialized(false); // Stop charging locally
+//               update(ref(database, "charging_status"), { isChargingInitialized: false }); // Update Firebase
+//               setEnergy(0); // Reset energy
+//               toast.success("Charging complete. Target energy reached.");
+//               router.push("/done"); // Redirect to done page
+//             }
+//             return newEnergy;
+//           });
+//         }
+//       }, 1000);
+
+//       return () => clearInterval(interval);
+//     }
+//   }, [isChargingInitialized, bmsData, targetEnergy, router]);
+
+//   // useEffect(() => {
+//   //   if (!isChargingInitialized) return;
+
+//   //   if (isFodThere) {
+//   //     setIsChargingInitialized(false);
+//   //     router.push("/fod-warning");
+//   //     return;
+//   //   }
+
+//   //   if (!isScootyParked) {
+//   //     setIsChargingInitialized(false);
+//   //     router.push("/emergency-stop");
+//   //     return;
+//   //   }
+
+//   //   if (isMisaligned) {
+//   //     setIsChargingInitialized(false);
+//   //     router.push("/MisalignmentDetection");
+//   //     return;
+//   //   }
+//   // }, [isFodThere, isScootyParked, isChargingInitialized, isMisaligned, router]);
+
+ 
+//   return (
+//     <div
+//       className="w-[768px] h-[1024px] overflow-hidden bg-transparent font-sans pt-7"
+//       style={{
+//         backgroundImage: "url(/money-bg.png)",
+//         backgroundSize: "cover",
+//         backgroundPosition: "center",
+//       }}
+//     >
+//       <div className="flex justify-center items-center p-1 pt-40 w-full px-8">
+//         {/* <ChargingPadWarning isFodThere={isFodThere} /> */}
+//         <Card className="w-full max-w-md bg-transparent border-none">
+//           <CardContent className="border-none p-8">
+//             <div className="flex flex-col items-center space-y-8">
+//               <div className="flex items-center space-x-3">
+//                 <IndianRupee className="w-8 h-8 text-red-500" />
+//                 <span className="text-xl font-semibold text-white">
+//                   Select Amount
+//                 </span>
+//                 <TooltipProvider>
+//                   <Tooltip>
+//                     <TooltipTrigger>
+//                       <Info className="w-5 h-5 text-neutral-400" />
+//                     </TooltipTrigger>
+//                     <TooltipContent>
+//                       <p>Select the amount you want to contribute or pay.</p>
+//                     </TooltipContent>
+//                   </Tooltip>
+//                 </TooltipProvider>
+//               </div>
+
+//               <div className="flex gap-2 w-full justify-center">
+//                 {[100, 500, 1000, 5000].map((value) => (
+//                   <Button
+//                     key={value}
+//                     variant="outline"
+//                     size="sm"
+//                     onClick={() => handleQuickSelect(value)}
+//                     className={`px-3 py-1 text-sm ${
+//                       amount === value
+//                         ? "bg-red-500 text-white border-red-500"
+//                         : "text-neutral-400 hover:text-white"
+//                     }`}
+//                   >
+//                     {`₹${value}`}
+//                   </Button>
+//                 ))}
+//               </div>
+
+//               <div className="flex items-center justify-center w-full space-x-8">
+//                 <Button
+//                   variant="outline"
+//                   className="text-black hover:text-white hover:bg-neutral-950 transition-all duration-200 transform hover:scale-110"
+//                   onClick={decrementValue}
+//                 >
+//                   <ChevronLeft className="w-24 h-24 stroke-2" />
+//                 </Button>
+
+//                 <div className="text-7xl font-bold text-white">
+//                   {formatNumber(amount)}
+//                 </div>
+
+//                 <Button
+//                   variant="outline"
+//                   className="text-black hover:text-white hover:bg-neutral-950 transition-all duration-200 transform hover:scale-110"
+//                   onClick={incrementValue}
+//                 >
+//                   <ChevronRight className="w-24 h-24 stroke-2" />
+//                 </Button>
+//               </div>
+
+//               <div className="flex justify-center w-full">
+//                 <Button
+//                   className="w-40 h-12 text-lg bg-red-500 hover:bg-red-600 text-white font-semibold transition-all duration-200 hover:scale-105 disabled:opacity-50"
+//                   onClick={handleSelect}
+//                   disabled={isLoading || amount === 0}
+//                 >
+//                   {isLoading ? "Processing..." : "Confirm"}
+//                 </Button>
+//               </div>
+
+//               <div className="text-sm text-neutral-500">
+//                 Selected Amount: {formatNumber(amount)}
+//               </div>
+//             </div>
+//           </CardContent>
+//         </Card>
+//       </div>
+//     </div>
+//   );
+// }
+

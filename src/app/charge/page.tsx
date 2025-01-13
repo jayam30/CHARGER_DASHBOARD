@@ -1,4 +1,6 @@
 
+////////////////////////starting new//////////////////////////////////////////////
+
 "use client";
 
 import WaveCharging from "@/components/WaveCharging";
@@ -43,7 +45,9 @@ const Charge = () => {
     isPaused,
     setPausedTimeLeft,
     setPauseTimestamp,
+
   } = useChargingTimer();
+  console.log("timeleft", timeLeft);
   
   const [power, setPower] = useState<number>(0);
   const [energy, setEnergy] = useState<number>(0);
@@ -226,6 +230,10 @@ const Charge = () => {
         backgroundPosition: "center",
       }}
     >
+
+
+    
+
      
       <div className="flex justify-center items-center p-1 pt-20 w-full px-8">
         <motion.div
@@ -286,9 +294,16 @@ const Charge = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.8 }}
         >
-          <span className="text-white/90 text-sm font-medium">
-            {SOC + "% "}Charged
-          </span>
+          <button
+    onClick={() => {
+      setIsChargingInitialized(false); // Stop the charging process
+      set(ref(database, "chargingStatus"), false); // Update Firebase charging status
+      router.push("/"); // Navigate to the home page
+    }}
+    className="text-white/90 text-sm font-medium flex items-center"
+  >
+    {SOC + "% "}Charged
+  </button>
           <svg
             width="14"
             height="14"

@@ -1,66 +1,73 @@
 
+////////////////////////starting new//////////////////////////////////////////////
+
 import { useState, useEffect, useRef } from "react";
 import { ref, set, onValue, off } from "firebase/database";
 import { database } from "@/config/firebase";
-import { toast } from "sonner"; //last
-import { useRouter } from "next/navigation"; //last
-import { useBMSData } from "./useBMSData" //last
 
 interface ChargingStatus {
   isChargingInitialized: boolean;
   duration: {
     hours: number;
     minutes: number;
-    endTime?: number | null;
+    endTime?: number;
   };
-  targetEnergy?: number; //last
 }
 
 export const useChargingStatus = () => {
+  const [status, setStatus] = useState<ChargingStatus>({
+    isChargingInitialized: false,
+    duration: { hours: 0, minutes: 0 },
+  });
+
   const [fodTriggered, setFodTriggered] = useState(false);
   const [misalignmentTriggered, setMisalignmentTriggered] = useState(false);
   const [emergencyStop, setEmergencyStop] = useState(false);
-  //last
-  const [energy, setEnergy] = useState(0);
-  const router = useRouter();
-  const bmsData = useBMSData();
-
-//last
 
   const lastValidChargingState = useRef<ChargingStatus | null>(null);
-  const [status, setStatus] = useState<ChargingStatus>({
-    isChargingInitialized: false,
-    duration: {
-      hours: 0,
-      minutes: 0,
-      endTime: null,
-    },
-  });
 
-  // Listen to charging status
+  // Monitor and update charging status
   useEffect(() => {
     const chargingRef = ref(database, "charging_status");
 
     const onValueChange = (snapshot: any) => {
       if (snapshot.exists()) {
         const data: ChargingStatus = snapshot.val();
-        
-        // If no safety conditions are triggered
-        if (!fodTriggered && !misalignmentTriggered && !emergencyStop) {
-          setStatus(data);
-          if (data.isChargingInitialized) {
-            lastValidChargingState.current = data;
+        console.log("Firebase charging_status data:", data);
+
+        const now = Date.now();
+
+        // Check endTime validity
+        if (data.duration?.endTime && data.isChargingInitialized) {
+          if (now >= data.duration.endTime) {
+            resetChargingStatus(); // Reset if endTime is reached
+            return;
           }
-        } else {
-          // Store the current state if charging is active
-          if (data.isChargingInitialized) {
-            lastValidChargingState.current = data;
-          }
-          // Force charging to false during safety conditions
-          setStatus(prev => ({
+        } else if (data.isChargingInitialized) {
+          // Calculate and store endTime if missing
+          const calculatedEndTime =
+            now +
+            (data.duration.hours * 3600000 + data.duration.minutes * 60000);
+          data.duration.endTime = calculatedEndTime;
+          set(ref(database, "charging_status"), data);
+        }
+
+        // Handle safety conditions
+        if (
+          fodTriggered ||
+          misalignmentTriggered ||
+          emergencyStop
+        ) {
+          // Disable charging if safety conditions are triggered
+          setStatus((prev) => ({
             ...prev,
-            isChargingInitialized: false
+            isChargingInitialized: false,
           }));
+        } else {
+          setStatus(data); // Update the status when safety conditions are cleared
+          if (data.isChargingInitialized) {
+            lastValidChargingState.current = data;
+          }
         }
       }
     };
@@ -69,26 +76,12 @@ export const useChargingStatus = () => {
     return () => off(chargingRef, "value", onValueChange);
   }, [fodTriggered, misalignmentTriggered, emergencyStop]);
 
-  // Handle safety conditions changes
-  useEffect(() => {
-    const safetyCleared = !fodTriggered && !misalignmentTriggered && !emergencyStop;
-    
-    if (safetyCleared && lastValidChargingState.current?.isChargingInitialized) {
-      // Restore the last valid charging state
-      updateChargingStatus(true, lastValidChargingState.current.duration);
-    } else if (!safetyCleared) {
-      // Force charging off when safety conditions are triggered
-      updateChargingStatus(false);
-    }
-  }, [fodTriggered, misalignmentTriggered, emergencyStop]);
-
-  // Listen to FOD status
+  // Monitor FOD status
   useEffect(() => {
     const fodRef = ref(database, "Is_FOD_Present");
     const onFODChange = (snapshot: any) => {
       if (snapshot.exists()) {
-        const newFodState = snapshot.val();
-        setFodTriggered(newFodState);
+        setFodTriggered(snapshot.val());
       }
     };
 
@@ -96,13 +89,12 @@ export const useChargingStatus = () => {
     return () => off(fodRef, "value", onFODChange);
   }, []);
 
-  // Listen to misalignment status
+  // Monitor misalignment status
   useEffect(() => {
     const misalignmentRef = ref(database, "isMisaligned");
     const onMisalignmentChange = (snapshot: any) => {
       if (snapshot.exists()) {
-        const newMisalignmentState = snapshot.val();
-        setMisalignmentTriggered(newMisalignmentState);
+        setMisalignmentTriggered(snapshot.val());
       }
     };
 
@@ -110,13 +102,12 @@ export const useChargingStatus = () => {
     return () => off(misalignmentRef, "value", onMisalignmentChange);
   }, []);
 
-  // Listen to emergency stop status
+  // Monitor emergency stop status
   useEffect(() => {
     const emergencyStopRef = ref(database, "emergencyStop");
     const onEmergencyStopChange = (snapshot: any) => {
       if (snapshot.exists()) {
-        const newEmergencyState = snapshot.val();
-        setEmergencyStop(newEmergencyState);
+        setEmergencyStop(snapshot.val());
       }
     };
 
@@ -126,27 +117,33 @@ export const useChargingStatus = () => {
 
   const updateChargingStatus = async (
     isCharging: boolean,
-    duration?: { hours: number; minutes: number; endTime?: number | null }
+    duration?: { hours: number; minutes: number; endTime?: number }
   ) => {
     try {
-      // Don't allow charging to be enabled if safety conditions aren't met
-      if (isCharging && (fodTriggered || misalignmentTriggered || emergencyStop)) {
+      if (fodTriggered || misalignmentTriggered || emergencyStop) {
+        console.warn("Safety conditions triggered, cannot update charging.");
         return false;
       }
 
-      const chargingRef = ref(database, "charging_status");
+      const now = Date.now();
+      const updatedEndTime =
+        duration?.endTime ||
+        (isCharging
+          ? now +
+            (duration?.hours || 0) * 3600000 +
+            (duration?.minutes || 0) * 60000
+          : undefined);
+
       const updatedStatus: ChargingStatus = {
         isChargingInitialized: isCharging,
-        duration: duration
-          ? {
-              hours: duration.hours || 0,
-              minutes: duration.minutes || 0,
-              endTime: duration.endTime || null,
-            }
-          : status.duration,
+        duration: {
+          hours: duration?.hours || 0,
+          minutes: duration?.minutes || 0,
+          endTime: updatedEndTime,
+        },
       };
 
-      await set(chargingRef, updatedStatus);
+      await set(ref(database, "charging_status"), updatedStatus);
       return true;
     } catch (error) {
       console.error("Error updating charging status:", error);
@@ -157,28 +154,21 @@ export const useChargingStatus = () => {
   const resetChargingStatus = async () => {
     try {
       lastValidChargingState.current = null;
-      const chargingRef = ref(database, "charging_status");
-      await set(chargingRef, {
+      await set(ref(database, "charging_status"), {
         isChargingInitialized: false,
-        duration: {
-          hours: 0,
-          minutes: 0,
-          endTime: null,
-        },
+        duration: { hours: 0, minutes: 0, endTime: null },
       });
-      return true;
     } catch (error) {
       console.error("Error resetting charging status:", error);
-      return false;
     }
   };
 
   return {
     status,
-    updateChargingStatus,
     fodTriggered,
     misalignmentTriggered,
     emergencyStop,
+    updateChargingStatus,
     resetChargingStatus,
   };
 };
