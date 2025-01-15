@@ -2353,10 +2353,10 @@ const Charge = () => {
     if (fodTriggered || misalignmentTriggered || emergencyStop) {
       // Turn off charging
       setEnergy(0);
-      set(ref(database, "charging_status/duration/isChargingInitialized"), false);
+      set(ref(database, "charging_status/isChargingInitialized"), false);
     } else {
       // Turn on charging
-      set(ref(database, "charging_status/duration/isChargingInitialized"), true);
+      set(ref(database, "charging_status/isChargingInitialized"), true);
     }
   }, [fodTriggered, misalignmentTriggered, emergencyStop]);
 
