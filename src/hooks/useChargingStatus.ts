@@ -1,8 +1,7 @@
-
 ////////////////////////starting new//////////////////////////////////////////////
 
 import { useState, useEffect, useRef } from "react";
-import { ref, set, onValue, off } from "firebase/database";
+import { ref, set, onValue, off, get } from "firebase/database";
 import { database } from "@/config/firebase";
 
 interface ChargingStatus {
@@ -13,12 +12,39 @@ interface ChargingStatus {
     endTime?: number;
   };
 }
+// add status in contextApi instead of hook for a global store
+// instead of fetching data from db , use the newly created store to 
+// in updateChargingStatus change setStatus to its equivalent contextApi version updater
 
 export const useChargingStatus = () => {
   const [status, setStatus] = useState<ChargingStatus>({
     isChargingInitialized: false,
     duration: { hours: 0, minutes: 0 },
   });
+
+  // const [status, setStatus] = useState<ChargingStatus | null>(null);
+
+  // useEffect(() => {
+  //   const statusRef = ref(database, "chargingStatus"); // Update the path as per your Firebase structure
+
+  //   const unsubscribe = onValue(statusRef, (snapshot) => {
+  //     const data = snapshot.val();
+  //     if (data) {
+  //       setStatus(data);
+  //     } else {
+  //       // Set a fallback default value if no data exists in the database
+  //       setStatus({
+  //         isChargingInitialized: false,
+  //         duration: { hours: 0, minutes: 0 },
+  //       });
+  //     }
+  //   });
+
+  //   // Cleanup subscription on unmount
+  //   return () => {
+  //     off(statusRef);
+  //   };
+  // }, []);
 
   const [fodTriggered, setFodTriggered] = useState(false);
   const [misalignmentTriggered, setMisalignmentTriggered] = useState(false);
@@ -53,17 +79,14 @@ export const useChargingStatus = () => {
         }
 
         // Handle safety conditions
-        if (
-          fodTriggered ||
-          misalignmentTriggered ||
-          emergencyStop
-        ) {
+        if (fodTriggered || misalignmentTriggered || emergencyStop) {
           // Disable charging if safety conditions are triggered
           setStatus((prev) => ({
             ...prev,
             isChargingInitialized: false,
           }));
         } else {
+          console.log("corrected data ", data);
           setStatus(data); // Update the status when safety conditions are cleared
           if (data.isChargingInitialized) {
             lastValidChargingState.current = data;
@@ -120,6 +143,13 @@ export const useChargingStatus = () => {
     duration?: { hours: number; minutes: number; endTime?: number }
   ) => {
     try {
+      console.log("aaa: ", isCharging, duration);
+      console.log(
+        "Values ---->",
+        isCharging,
+        duration?.hours,
+        duration?.minutes
+      );
       if (fodTriggered || misalignmentTriggered || emergencyStop) {
         console.warn("Safety conditions triggered, cannot update charging.");
         return false;
@@ -134,16 +164,47 @@ export const useChargingStatus = () => {
             (duration?.minutes || 0) * 60000
           : undefined);
 
-      const updatedStatus: ChargingStatus = {
+      const updatedStatus: Partial<ChargingStatus> = {
         isChargingInitialized: isCharging,
-        duration: {
-          hours: duration?.hours || 0,
-          minutes: duration?.minutes || 0,
-          endTime: updatedEndTime,
-        },
       };
 
-      await set(ref(database, "charging_status"), updatedStatus);
+      // If duration exists, include it in the updatedStatus
+      if (duration) {
+        updatedStatus.duration = {
+          hours: duration.hours || 0,
+          minutes: duration.minutes || 0,
+          endTime: updatedEndTime,
+        };
+      } else {
+        // Reference to the database path
+        const statusRef = ref(database, "charging_status");
+
+        // Fetch the current status
+        const snapshot = await get(statusRef);
+        const currentStatus: ChargingStatus = snapshot.exists()
+          ? snapshot.val()
+          : {
+              isChargingInitialized: false,
+              duration: { hours: 0, minutes: 0 },
+            };
+        updatedStatus.duration = currentStatus.duration;
+        if (!updatedStatus.duration) {
+          updatedStatus.duration = {
+            hours: 0,
+            minutes: 0,
+          };
+        }
+      }
+
+      // Log the updated status for debugging
+      console.log({ updatedStatus });
+
+      await set(ref(database, "charging_status"), {
+        ...updatedStatus,
+      });
+      setStatus(updatedStatus as ChargingStatus);
+
+      console.log("change or updated status", updatedStatus);
       return true;
     } catch (error) {
       console.error("Error updating charging status:", error);

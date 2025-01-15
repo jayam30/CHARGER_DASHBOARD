@@ -962,7 +962,7 @@ export default function Page() {
     setHours(hrs);
     setMinutes(mins);
   };
-
+  console.log("timeidaso",hours, minutes);
   const handleSelect = async () => {
     if (hours === 0 && minutes === 0) {
       toast.error("Please select a valid charging duration");
@@ -971,9 +971,12 @@ export default function Page() {
 
     setIsLoading(true);
     try {
+      console.log("dhruv ne bola", hours, minutes);
       const success = await updateChargingStatus(true, { hours, minutes });
+      // console.log("abhiav",hours, minutes);
       if (success) {
         toast.success(`Charging scheduled for ${hours}h ${minutes}m`);
+        // await updateChargingStatus()
         router.push("/charge");
       } else {
         toast.error("Failed to initialize charging");
@@ -1000,8 +1003,6 @@ export default function Page() {
     }
   }, [
     status?.isChargingInitialized,
-    
-    ,
     updateChargingStatus,
   ]);
 
