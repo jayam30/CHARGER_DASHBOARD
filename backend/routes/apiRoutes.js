@@ -1,9 +1,10 @@
 // const express = require("express");
 // const router = express.Router();
-// const DataModel = require("../models/DataModel");
+// const DataModel = require("./models/DataModel");
 
-// // Get all data
-// router.get("/data", async (req, res) => {
+// // Get all dataf6 4ff
+
+// router.get("..4/data", async (req, res) => {
 //   try {
 //     const data = await DataModel.find();
 //     res.status(200).json(data);

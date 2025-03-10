@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { ref, set, onValue, off, get } from "firebase/database";
 import { database } from "@/config/firebase";
+import { useBMSData } from "./useBMSData";
 
 interface ChargingStatus {
   isChargingInitialized: boolean;
@@ -51,6 +52,8 @@ export const useChargingStatus = () => {
   const [emergencyStop, setEmergencyStop] = useState(false);
 
   const lastValidChargingState = useRef<ChargingStatus | null>(null);
+  const bmsData = useBMSData();
+  
 
   // Monitor and update charging status
   useEffect(() => {
@@ -65,7 +68,9 @@ export const useChargingStatus = () => {
 
         // Check endTime validity
         if (data.duration?.endTime && data.isChargingInitialized) {
-          if (now >= data.duration.endTime) {
+          console.log({bmsData})
+          if (now >= data.duration.endTime && bmsData.targetSOC) {
+            console.log("HIIIIIIIIIIIIIIIIIIIIIIIIIIII")
             resetChargingStatus(); // Reset if endTime is reached
             return;
           }

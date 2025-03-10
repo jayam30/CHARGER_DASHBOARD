@@ -1,4 +1,4 @@
-// const DataModel = require("../models/DataModel");
+// const DataModel = require("./models/DataModel");
 
 // // Start Charging
 // const startCharging = async (chargingData) => {

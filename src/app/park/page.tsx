@@ -9,7 +9,7 @@ import router from "next/router";
 
 const Park = () => {
   const router = useRouter();
-  const [isParked, setIsParked] = useState(false);
+  const [isParked, setIsParked] = useState(false);//i changed it to true but false tha
   const [isScootyParked, setIsScootyParked] = useState(false);
   const [isFodPresent, setIsFodPresent] = useState(false);
 
@@ -17,12 +17,14 @@ const Park = () => {
     try {
       // Create references to both paths using the imported database instance
       const coilRef = ref(database, "IsReceiverCoilDetected");
+      console.log("Detection:", coilRef);
       const fodRef = ref(database, "Is_FOD_Present");
 
       let unsubscribeFod: (() => void) | undefined;
 
       // Set up listeners for both values
       const unsubscribeCoil = onValue(coilRef, (coilSnapshot) => {
+        console.log("Raw Coil Snapshot:", coilSnapshot.val());
         if (unsubscribeFod) {
           unsubscribeFod(); // Clean up previous FOD listener if it exists
         }
@@ -60,7 +62,16 @@ const Park = () => {
       router.push("/select");
     }, 5000);
   }
-
+  // useEffect(() => {
+  //   if (isParked && !isFodPresent) {
+  //     const timeout = setTimeout(() => {
+  //       router.push("/select");
+  //     }, 5000);
+  
+  //     return () => clearTimeout(timeout); // Cleanup timeout if the condition changes before execution
+  //   }
+  // }, [isParked, isFodPresent]);
+  
   return (
     <div
       className="w-[768px] h-[1024px] overflow-hidden bg-[#2A2D32] font-sans pt-7"

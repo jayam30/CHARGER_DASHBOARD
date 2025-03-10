@@ -1,11 +1,11 @@
 // const express = require("express");
 // const router = express.Router();
-// const DataModel = require("../models/DataModel");
+// const DataModel = require("./models/DataModel");
 
 // // Get BMS Data
 // router.get("/", async (req, res) => {
 //   try {
-//     const data = await DataModel.findOne({}, "SOC current voltage"); // Select only BMS-related fields
+//     const data = await DataModel.findOne({SOC}, "SOC current voltage"); // Select only BMS-related fields
 //     res.status(200).json(data);
 //   } catch (error) {
 //     res.status(500).json({ message: "Error fetching BMS data", error: error.message });

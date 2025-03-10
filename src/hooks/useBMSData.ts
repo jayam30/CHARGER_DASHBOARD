@@ -9,9 +9,9 @@ interface BMSData {
   voltage: number;
   current: number;
   SOC: number;
-  targetSOC?: number; //jayam
-  isFodThere?: boolean; //jayam
-  isMisaligned?: boolean; // New field for misalignment
+  targetSOC?: number; 
+  isFodThere?: boolean; 
+  isMisaligned?: boolean; 
   isReceiverCoilDetected: boolean;
   loading: boolean;
   error: string | null;
@@ -22,9 +22,9 @@ export const useBMSData = () => {
     voltage: 0,
     current: 0,
     SOC: 0,
-    targetSOC: 0, //jayam
-    isFodThere: false, //jayam
-    isMisaligned: false, // Initialize isMisaligned as false
+    targetSOC: 0,
+    isFodThere: false, 
+    isMisaligned: false, // Initialize isMisaligned  
     isReceiverCoilDetected: true,
     loading: true,
     error: null,
@@ -44,9 +44,9 @@ export const useBMSData = () => {
             voltage: data.latest?.voltage ?? 0,
             current: data.latest?.current ?? 0,
             SOC: data.latest?.SOC ?? 0,
-            targetSOC: data.latest?.targetSOC ?? 0,  //jayam
-            isFodThere: data.isFodThere ?? false, //jayam
-            isMisaligned: data.isMisaligned ?? false, // Update isMisaligned from Firebase
+            targetSOC: data.latest?.targetSOC ?? 0,
+            isFodThere: data.isFodThere ?? false, 
+            isMisaligned: data.isMisaligned ?? false, // Update isMisaligned from Firebase 
             isReceiverCoilDetected: data.isReceiverCoilDetected ?? true,
             loading: false,
             error: null,

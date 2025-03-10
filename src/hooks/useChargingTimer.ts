@@ -1,7 +1,10 @@
 // hooks/useChargingTimer.ts
 import { useState, useEffect } from "react";
 import { useChargingStatus } from "./useChargingStatus";
-import { useRouter } from "next/navigation";
+import { redirect, useRouter } from "next/navigation";
+import { useBMSData } from "./useBMSData";
+import { database } from "@/config/firebase";
+import { ref, set, update } from "firebase/database";
 
 interface TimeLeft {
   hours: number;
@@ -28,6 +31,7 @@ export const useChargingTimer = (): ChargingTimerReturn => {
   const [isPaused, setIsPaused] = useState(false);
   const [pausedTimeLeft, setPausedTimeLeft] = useState<number | null>(null);
   const [pauseTimestamp, setPauseTimestamp] = useState<number | null>(null);
+  const bmsData = useBMSData();
   const [timeLeft, setTimeLeft] = useState<TimeLeft>({
     hours: 0,
     minutes: 0,
@@ -48,18 +52,18 @@ export const useChargingTimer = (): ChargingTimerReturn => {
         const seconds = Math.floor((difference % (1000 * 60)) / 1000);
         console.log("hours", hours, "minutes", minutes, "seconds", seconds);
         setTimeLeft({ hours, minutes, seconds });
-      
       }
     }
   }, [status?.duration?.endTime]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
-
+    console.log({bmsData});
     if (
       status?.isChargingInitialized &&
       status?.duration?.endTime &&
-      !isPaused
+      !isPaused &&
+      !bmsData.targetSOC
     ) {
       interval = setInterval(() => {
         const now = Date.now();
@@ -85,13 +89,19 @@ export const useChargingTimer = (): ChargingTimerReturn => {
 
         setTimeLeft({ hours, minutes, seconds });
       }, 1000);
-    }
 
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
+      return () => {
+        if (interval) {
+          clearInterval(interval);
+        }
+      };
+    } else if (bmsData.targetSOC && bmsData.SOC >= bmsData.targetSOC) {
+      const targetRef = ref(database, "BMSData/latest/targetSOC");
+      set(targetRef, 0);
+      const target2Ref = ref(database, "charging_status/isChargingInitialized");
+      set(target2Ref, false);
+      router.push("/done");
+    }
   }, [
     status?.isChargingInitialized,
     status?.duration?.endTime,

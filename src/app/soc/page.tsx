@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useBMSData } from "@/hooks/useBMSData";
 import { useChargingStatus } from "@/hooks/useChargingStatus";
-import { ref, update } from "firebase/database";
+import { ref, set, update } from "firebase/database";
 import { database } from "@/config/firebase";
 import ChargingPadWarning from "@/components/FodDialog";
 
@@ -48,7 +48,7 @@ export default function Page() {
 
       // Update the target SOC in Firebase
       const targetRef = ref(database, "BMSData/latest/targetSOC");
-      await update(targetRef, { targetSOC: percentage });
+      await set(targetRef, percentage);
       console.log("Target SOC updated successfully.");
 
       // Initialize charging
@@ -57,8 +57,8 @@ export default function Page() {
 
       if (chargingSuccess) {
         toast.success(`Charging started to reach ${formatPercentage(percentage)}`);
-        router.push("/charge");
-        console.log("Redirecting to /charge");
+        router.push("/soccharge");
+        console.log("Redirecting to /soccharge");
       } else {
         toast.error("Failed to initialize charging");
       }
@@ -70,40 +70,7 @@ export default function Page() {
     }
   };
 
-  // Monitor SOC and stop charging when target is reached
-  useEffect(() => {
-    if (status.isChargingInitialized && currentSOC >= targetSOC && targetSOC > 0) {
-      const stopCharging = async () => {
-        try {
-          console.log("Target SOC reached. Stopping charging...");
-          // Update charging_status to false
-          const chargingRef = ref(database, "charging_status");
-          await update(chargingRef, {
-            isChargingInitialized: false,
-            duration: {
-              hours: status.duration.hours,
-              minutes: status.duration.minutes,
-              endTime: null, // Clear the endTime when charging stops
-            },
-          });
 
-          // Reset charging status in the hook
-          await resetChargingStatus();
-
-          toast.success(`Charging completed: ${formatPercentage(targetSOC)}`);
-          router.push("/charge");
-          console.log("Redirecting to /charge after stopping charging");
-        } catch (error) {
-          console.error("Error stopping charging:", error);
-          toast.error("Failed to stop charging");
-        }
-      };
-
-      stopCharging();
-    }
-  }, [currentSOC, targetSOC, status.isChargingInitialized, resetChargingStatus, router]);
-
-  // Handle redirections for FOD and scooty park, only when not charging
   useEffect(() => {
     if (!status.isChargingInitialized) {
       if (isFodThere) {

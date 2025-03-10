@@ -1,4 +1,4 @@
-// const DataModel = require("../models/DataModel");
+// const DataModel = require("./models/DataModel");
 
 // // Update BMS data
 // const updateBMSData = async (newBMSData) => {

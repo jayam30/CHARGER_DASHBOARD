@@ -1,11 +1,11 @@
-// const mongoose = require("mongoose");
+//  const mongoose = require("mongoose");
 
 // // MongoDB connection function
 // const connectDB = async () => {
 //   try {
-//     const conn = await mongoose.connect("mongodb://localhost:27017/your_database_name", {
-//       useNewUrlParser: true,
-//       useUnifiedTopology: true,
+//     const conn = await mongoose.connect("mongodb+srv://panditjayam:Jayam30@jayam.6dnx8.mongodb.net/mydatabase", {
+//       // useNewUrlParser: true,
+//       // useUnifiedTopology: true,
 //     });
 //     console.log(`MongoDB Connected: ${conn.connection.host}`);
 //   } catch (error) {

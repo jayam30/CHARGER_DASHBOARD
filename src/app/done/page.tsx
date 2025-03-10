@@ -3,8 +3,10 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { database } from "@/config/firebase";
-import { ref, onValue } from "firebase/database";
+import { ref, onValue, set } from "firebase/database";
 import Image from "next/image";
+import { useBMSData } from "@/hooks/useBMSData";
+
 
 const Page = () => {
   const router = useRouter();
@@ -27,14 +29,17 @@ const Page = () => {
           const isFodPresent = fodSnapshot.val();
           setIsScootyParked(isCoilDetected);
           if (isCoilDetected === false) {
-            router.push("/");
+            // router.push("/");
+            resetCoilAndRedirect();
           }
         });
       });
 
       // Set a timeout to redirect after 10 seconds
       const timer = setTimeout(() => {
-        router.push("/");
+       
+        resetCoilAndRedirect();
+        // router.push("/");
       }, 10000); // 10000 milliseconds = 10 seconds
 
       return () => {
@@ -48,6 +53,17 @@ const Page = () => {
       console.error("Error setting up Firebase listeners:", error);
     }
   }, [router]);
+
+// upadate 1
+  const resetCoilAndRedirect = async () => {
+    try {
+      const coilRef = ref(database, "IsReceiverCoilDetected");
+      await set(coilRef, false); // Reset coil detection to false
+      router.push("/"); // Navigate to home page
+    } catch (error) {
+      console.error("Error resetting receiver coil detection:", error);
+    }
+  };
 
   return (
     <div
